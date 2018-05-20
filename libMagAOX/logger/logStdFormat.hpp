@@ -22,20 +22,22 @@ namespace logger
   * \ingroup logformat
   */
 template<typename logT>
-void _stdFormat( bufferPtrT & logBuffer /**< [in] the binary log buffer */)
+void _stdFormat( ::capnp::FlatArrayMessageReader & reader )
 {
    logLevelT lvl;
-   eventCodeT ec;
+   
    time::timespecX ts;
-   msgLenT len;
 
-   extractBasicLog( lvl, ec, ts, len, logBuffer); 
+   logT lmsg;
 
-   typename logT::messageT msg;
-
-   logT::extract(msg, logBuffer.get()+messageOffset, len);
-
-   std::cout << ts.ISO8601DateTimeStrX() << " " << levelString(lvl) << " " << logT::msgString(msg) << "\n";
+   
+   
+   ts = log_entry::timestamp(reader);
+   lvl = log_entry::logLevel(reader);
+   
+   log_entry::unformat( lmsg, reader);
+   
+   std::cout << ts.ISO8601DateTimeStrX() << " " << levelString(lvl) << " " << logT::msgString(lmsg) << "\n";
 }
 
 /// Place the log in standard text format, with event code specific formatting.
@@ -43,18 +45,17 @@ void _stdFormat( bufferPtrT & logBuffer /**< [in] the binary log buffer */)
   * \ingroup logformat
   */ 
 inline
-void logStdFormat(bufferPtrT & buffer /**< [in] the binary log buffer */ )
+void logStdFormat(::capnp::FlatArrayMessageReader & reader )
 {
-   eventCodeT ec;
-   ec = eventCode(buffer);
+   uint16_t ec = log_entry::eventCode(reader);
 
    switch(ec)
    {
-      case git_state::eventCode:
-         return _stdFormat<git_state>(buffer);
-      case text_log::eventCode:
-         return _stdFormat<text_log>(buffer);
-      case user_log::eventCode:
+      case LogEntry::GIT_STATE:
+         return _stdFormat<git_state>(reader);
+      case LogEntry::TEXT_LOG:
+         return _stdFormat<text_log>(reader);
+/*      case LogEntry::Entry::USER_LOG:
          return _stdFormat<user_log>(buffer);
       case state_change::eventCode:
          return _stdFormat<state_change>(buffer);
@@ -77,7 +78,7 @@ void logStdFormat(bufferPtrT & buffer /**< [in] the binary log buffer */ )
       case loop_paused::eventCode:
          return _stdFormat<loop_paused>(buffer);
       case loop_open::eventCode:
-         return _stdFormat<loop_open>(buffer);
+         return _stdFormat<loop_open>(buffer);*/
       
       default:
          std::cout << "Unknown log type: " << ec << "\n";

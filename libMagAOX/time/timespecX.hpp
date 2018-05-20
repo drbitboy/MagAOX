@@ -10,6 +10,7 @@
 #define time_timespecX_hpp
 
 #include <cstdint>
+#include <iostream>
 
 namespace MagAOX
 {
@@ -93,7 +94,7 @@ struct timespecX
       return 0;   
    }
    
-    ///Get the filname timestamp for this timespecX.
+    ///Get the filename timestamp for this timespecX.
    /** Returns a string with the timestamp encoded as
      * \verbatim
        YYYYMMDDHHMMSSNNNNNNNNN

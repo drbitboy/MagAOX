@@ -8,150 +8,198 @@
 #ifndef logger_logTypes_hpp
 #define logger_logTypes_hpp
 
+#include "logLevels.hpp"
+#include "../time/timespecX.hpp"
 #include "../app/stateCodes.hpp"
 
-#include "logTypesBasics.hpp"
+//#include "logTypesBasics.hpp"
+
+#include "capnp/logEntry.capnp.h"
+#include <capnp/message.h>
+#include <capnp/serialize-packed.h>
 
 namespace MagAOX
 {
 namespace logger 
 {
 
+typedef uint16_t eventCodeT;
+
+/// The basic log entry type.
+/** \ingroup logtypes
+  *
+  */ 
+struct log_entry
+{
+   /// Serialize a log entry
+   /** Uses cap'n proto generated structs to serialize the log level, timespec, and the log entry message.
+     * The log entry message serialization is handled by the approprate log type.
+     *
+     * \returns 0 on success.
+     * \returns \<0 on error.
+     * 
+     * \tparam logT is the log entry type which handles the messaage serialization.
+     * 
+     */
+   template <typename logT>
+   static int serialize( ::capnp::MallocMessageBuilder & builder,
+                         const logLevelT & lvl,
+                         const time::timespecX & ts,
+                         const logT & msg
+                       )
+   {
+      LogEntry::Builder logEntry = builder.initRoot<LogEntry>();
+      
+      logEntry.setLevel(lvl);
+      logEntry.setTimeS(ts.time_s);
+      logEntry.setTimeNS(ts.time_ns);
+      
+      return logT::serialize( logEntry, msg);
+   }
+   
+   /// Get the event code from a log message buffer
+   /** The event code, which corresponds to an enum in the cap'n proto LogEntry structure, identifies the log entry uniquely.
+     * 
+     * \returns the event code.
+     */ 
+   static eventCodeT eventCode( ::capnp::FlatArrayMessageReader & reader )
+   {
+      LogEntry::Reader logEntry = reader.getRoot<LogEntry>();
+      return logEntry.which();
+   }
+   
+   /// Get the log level from a log message buffer
+   /**
+     * \returns the log level.
+     */ 
+   static logLevelT logLevel( ::capnp::FlatArrayMessageReader & reader )
+   {
+      LogEntry::Reader logEntry = reader.getRoot<LogEntry>();
+      return logEntry.getLevel();
+   }
+   
+   /// Get the timestamp of the log entry.
+   /**
+     * \returns the timestamp as a time::timespecX.
+     */ 
+   static time::timespecX timestamp( ::capnp::FlatArrayMessageReader & reader )
+   {
+      LogEntry::Reader logEntry = reader.getRoot<LogEntry>();
+      
+      time::timespecX ts;
+      
+      ts.time_s = logEntry.getTimeS();
+      ts.time_ns = logEntry.getTimeNS();
+      
+      return ts;
+   }
+   
+   /// Unserialze the log entry message
+   /**
+     * \returns 0 on sucess
+     * \returns \<0 on error
+     *
+     * \tparam logT is the log type
+     */ 
+   template <typename logT>
+   static int unserialize( logT & msg,
+                           ::capnp::FlatArrayMessageReader & reader
+                         )
+   {
+      LogEntry::Reader logEntry = reader.getRoot<LogEntry>();
+      
+      return logT::unserialize( msg, logEntry );
+   }
+};
+   
+
 /// Log entry recording the build-time git state.
 /** \ingroup logtypes
   */
-struct git_state
+struct git_state 
 {
-   //Define the log name for use in the database
-   //Event: "Git State"
-   
-   ///The event code
-   static const eventCodeT eventCode = eventCodes::GIT_STATE;
-
    ///The default level 
    static const logLevelT defaultLevel = logLevels::INFO;
    
-   ///Length of the sha1 hash in ASCII
-   static const size_t s_sha1Length = 40;
-   
-   ///The type of the message
-   struct messageT
-   {
-      char m_sha1[s_sha1Length];
-      char m_modified {0};
-      std::string m_repoName;
-      
-      ///Allow default construction
-      messageT()
-      {
-         for(int i=0;i<s_sha1Length;++i) m_sha1[i] = 0;
-      }
-      
-      ///Construct from components
-      messageT( const std::string & repoName, ///< [in] the name of the repo
-                const std::string & sha1,     ///< [in] the SHA1 hash of the repo
-                const bool modified           ///< [in] the modified status (true or false)
-              )
-      {
-         m_repoName = repoName;
-         
-         int N = sha1.size();
-         
-         if(sha1.size() != s_sha1Length)
-         {
-            std::cerr << "SHA-1 incorrect size!\n";
-            if(N > s_sha1Length) N = s_sha1Length;
-         }
-         
-         for(int i=0; i<N;++i) m_sha1[i] = sha1[i];
-         
-         if(modified) m_modified = 1;
-         else m_modified = 0;
-      }
-               
-   };
-   
-   ///Get the length of the message.
-   static msgLenT length( const messageT & msg )
-   {
-      return (s_sha1Length + 1)*sizeof(char) + msg.m_repoName.size();
-   }
+   std::string m_repoName;               
+   std::string m_sha1;
+   bool m_modified {0};
   
-   ///Format the buffer given the input message.
-   static int format( void * msgBuffer,    ///< [out] the buffer, must be pre-allocated to size length(msg)
-                      const messageT & msg ///< [in] the message, which is placed in the buffer char by char.
-                    )
+   static int serialize( LogEntry::Builder & logEntry, ///< [out]
+                         const git_state & msg          ///< [in] 
+                       )
    {
-      char * cbuff = reinterpret_cast<char *>(msgBuffer);
-      
-      int i;
-      for(i=0; i< msg.m_repoName.size(); ++i) cbuff[i] = msg.m_repoName[i];
-         
-      for(int j =0; j< s_sha1Length; ++j)
-      {
-         cbuff[i] = msg.m_sha1[j];
-         ++i;
-      }
-      cbuff[i] = msg.m_modified;
-      
+      logEntry.setGitState(logEntry.getGitState());
+      logEntry.getGitState().setRepoName(msg.m_repoName);
+      logEntry.getGitState().setSha1(msg.m_sha1);
+      logEntry.getGitState().setModified(msg.m_modified);
       return 0;
    }
    
-   ///Extract the message from the buffer and fill in the mesage
-   /** 
-     * \returns 0 on success.
-     * \returns -1 on an error.
-     */ 
-   static int extract( messageT & msg, ///< [out] the message which is populated with the contents of buffer.
-                       void * msgBuffer,  ///< [in] the buffer containing the GIT state.
-                       msgLenT len ///< [in] the length of the string contained in buffer.
-                     )
+   static int unserialize( git_state & msg,             ///< [out] 
+                           LogEntry::Reader & logEntry ///< [in]
+                         )
    {
-      char * cbuff = reinterpret_cast<char *>(msgBuffer);
+      GitState::Reader gitState = logEntry.getGitState();
       
-      int nlen = len - (s_sha1Length + 1);
-      
-      msg.m_repoName.resize(nlen);
-      
-      int i;
-      for(i =0; i< nlen; ++i) msg.m_repoName[i] = cbuff[i];
-      
-      for(int j=0; j< s_sha1Length; ++j)
-      {
-         msg.m_sha1[j] = cbuff[i];
-         ++i;
-      }
-      msg.m_modified = cbuff[i];
+      msg.m_repoName = gitState.getRepoName();
+      msg.m_sha1 = gitState.getSha1();
+      msg.m_modified = gitState.getModified();
       
       return 0;
    }
-   
-   static std::string msgString( messageT & msg )
+
+   static std::string msgString( git_state & msg )
    {
       std::string str = msg.m_repoName + " GIT: ";
-      for(int i=0;i<s_sha1Length;++i) str += msg.m_sha1[i];
-      
+      str += msg.m_sha1;
       if(msg.m_modified) str += " MODIFIED";
       
       return str;
    }
-}; //git_state 
    
-///A simple text log, a string-type log.
+}; //git_state 
+
+
+///A simple text log.
 /** \ingroup logtypes
   */
-struct text_log : public string_log
+struct text_log 
 {
-   //Define the log name for use in the database
-   //Event: "Text Log"
-   
-   ///The event code
-   static const eventCodeT eventCode = eventCodes::TEXT_LOG;
-
    ///The default level 
    static const logLevelT defaultLevel = logLevels::INFO;
    
+   ///This log entry consists of unformatted text.
+   std::string m_text;               
+  
+   static int serialize( LogEntry::Builder & logEntry, ///< [out]
+                         const text_log  & msg         ///< [in] 
+                       )
+   {
+      logEntry.setTextLog(logEntry.getTextLog());      
+      logEntry.getTextLog().setText(msg.m_text);
+      
+      return 0;
+   }
+   
+   static int unserialize( text_log & msg,             ///< [out] 
+                           LogEntry::Reader & logEntry ///< [in]
+                         )
+   {
+      TextLog::Reader textLog = logEntry.getTextLog();
+      msg.m_text = textLog.getText();
+      
+      return 0;
+   }
+
+   static std::string msgString( text_log & msg )
+   {
+      return msg.m_text;
+   }
+   
 };
+
+#if 0
 
 ///User entered log, a string-type log.
 /** \ingroup logtypes
@@ -411,6 +459,8 @@ struct state_change
       return s.str();
    }
 };
+
+#endif
 
 } //namespace logger
 } //namespace MagAOX
