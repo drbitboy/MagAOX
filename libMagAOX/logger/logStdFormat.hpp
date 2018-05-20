@@ -35,7 +35,7 @@ void _stdFormat( ::capnp::FlatArrayMessageReader & reader )
    ts = log_entry::timestamp(reader);
    lvl = log_entry::logLevel(reader);
    
-   log_entry::unformat( lmsg, reader);
+   log_entry::unserialize( lmsg, reader);
    
    std::cout << ts.ISO8601DateTimeStrX() << " " << levelString(lvl) << " " << logT::msgString(lmsg) << "\n";
 }
@@ -55,15 +55,15 @@ void logStdFormat(::capnp::FlatArrayMessageReader & reader )
          return _stdFormat<git_state>(reader);
       case LogEntry::TEXT_LOG:
          return _stdFormat<text_log>(reader);
-/*      case LogEntry::Entry::USER_LOG:
-         return _stdFormat<user_log>(buffer);
-      case state_change::eventCode:
-         return _stdFormat<state_change>(buffer);
-      case software_debug::eventCode:
-         return _stdFormat<software_debug>(buffer);
-      case software_debug2::eventCode:
-         return _stdFormat<software_debug2>(buffer);
-      case software_info::eventCode:
+      case LogEntry::USER_LOG:
+         return _stdFormat<user_log>(reader);
+      /*case state_change::eventCode:
+         return _stdFormat<state_change>(buffer);*/
+      case LogEntry::SOFTWARE_DEBUG:
+         return _stdFormat<software_debug>(reader);
+      case LogEntry::SOFTWARE_DEBUG2:
+         return _stdFormat<software_debug2>(reader);
+      /*case software_info::eventCode:
          return _stdFormat<software_info>(buffer);
       case software_warning::eventCode:
          return _stdFormat<software_warning>(buffer);

@@ -8,15 +8,17 @@
 #ifndef logger_logTypes_hpp
 #define logger_logTypes_hpp
 
-#include "logLevels.hpp"
+
 #include "../time/timespecX.hpp"
 #include "../app/stateCodes.hpp"
-
-//#include "logTypesBasics.hpp"
 
 #include "capnp/logEntry.capnp.h"
 #include <capnp/message.h>
 #include <capnp/serialize-packed.h>
+
+#include "logLevels.hpp"
+#include "logTypesBasics.hpp"
+
 
 namespace MagAOX
 {
@@ -24,6 +26,10 @@ namespace logger
 {
 
 typedef uint16_t eventCodeT;
+
+typedef ::capnp::MallocMessageBuilder builderT;
+
+typedef ::capnp::FlatArrayMessageReader readerT;
 
 /// The basic log entry type.
 /** \ingroup logtypes
@@ -42,10 +48,10 @@ struct log_entry
      * 
      */
    template <typename logT>
-   static int serialize( ::capnp::MallocMessageBuilder & builder,
-                         const logLevelT & lvl,
-                         const time::timespecX & ts,
-                         const logT & msg
+   static int serialize( builderT & builder,         ///< [out] The message builder to hold the serialized log.
+                         const logLevelT & lvl,      ///< [in] The log level.
+                         const time::timespecX & ts, ///< [in] The time stamp of the log.
+                         const logT & msg            ///< [in] The log-type specific message to log.
                        )
    {
       LogEntry::Builder logEntry = builder.initRoot<LogEntry>();
@@ -62,7 +68,7 @@ struct log_entry
      * 
      * \returns the event code.
      */ 
-   static eventCodeT eventCode( ::capnp::FlatArrayMessageReader & reader )
+   static eventCodeT eventCode( readerT & reader /**< [in] The message reader holding the serialized log.*/ )
    {
       LogEntry::Reader logEntry = reader.getRoot<LogEntry>();
       return logEntry.which();
@@ -72,7 +78,7 @@ struct log_entry
    /**
      * \returns the log level.
      */ 
-   static logLevelT logLevel( ::capnp::FlatArrayMessageReader & reader )
+   static logLevelT logLevel( readerT & reader /**< [in] The message reader holding the serialized log.*/ )
    {
       LogEntry::Reader logEntry = reader.getRoot<LogEntry>();
       return logEntry.getLevel();
@@ -82,7 +88,7 @@ struct log_entry
    /**
      * \returns the timestamp as a time::timespecX.
      */ 
-   static time::timespecX timestamp( ::capnp::FlatArrayMessageReader & reader )
+   static time::timespecX timestamp( readerT & reader  /**< [in] The message reader holding the serialized log.*/ )
    {
       LogEntry::Reader logEntry = reader.getRoot<LogEntry>();
       
@@ -102,15 +108,15 @@ struct log_entry
      * \tparam logT is the log type
      */ 
    template <typename logT>
-   static int unserialize( logT & msg,
-                           ::capnp::FlatArrayMessageReader & reader
+   static int unserialize( logT & msg,      ///< [out] The log-type specific message from the log
+                           readerT & reader ///< [in] The message reader holding the serialized log.
                          )
    {
       LogEntry::Reader logEntry = reader.getRoot<LogEntry>();
       
       return logT::unserialize( msg, logEntry );
    }
-};
+}; //log_type
    
 
 /// Log entry recording the build-time git state.
@@ -121,12 +127,17 @@ struct git_state
    ///The default level 
    static const logLevelT defaultLevel = logLevels::INFO;
    
-   std::string m_repoName;               
-   std::string m_sha1;
-   bool m_modified {0};
+   std::string m_repoName;  ///< The name of the repository             
+   std::string m_sha1; ///< The sha1 hash of the latest commit
+   bool m_modified {0}; ///< Whether or not the repositor has been modified since the last commit
   
-   static int serialize( LogEntry::Builder & logEntry, ///< [out]
-                         const git_state & msg          ///< [in] 
+   /// Serialize the git state into the cap'n proto buffer.
+   /**
+     * \returns 0 on success
+     * \returns \<0 on error
+     */  
+   static int serialize( LogEntry::Builder & logEntry, ///< [out] The LogEntry holding the serialized log.  Initialized from builderT.
+                         const git_state & msg         ///< [in] The git_state to log.
                        )
    {
       logEntry.setGitState(logEntry.getGitState());
@@ -136,8 +147,13 @@ struct git_state
       return 0;
    }
    
-   static int unserialize( git_state & msg,             ///< [out] 
-                           LogEntry::Reader & logEntry ///< [in]
+   /// Un-serialize the cap'n proto buffer to read the git state
+   /**
+     * \returns 0 on success
+     * \returns \<0 on error
+     */
+   static int unserialize( git_state & msg,            ///< [out] The git_state from the log.
+                           LogEntry::Reader & logEntry ///< [in] The LogEntry holding the serialized log.
                          )
    {
       GitState::Reader gitState = logEntry.getGitState();
@@ -149,7 +165,25 @@ struct git_state
       return 0;
    }
 
-   static std::string msgString( git_state & msg )
+   /// Un-serialize the cap'n proto buffer to read the repo name
+   /** This particular function is offered to support finding the point of a restart by looking for "MAGAOX".
+     * 
+     * \returns 0 on success
+     * \returns \<0 on error
+     */
+   static std::string repoName( readerT & reader /**< [in] The message reader holding the serialized log.*/ )
+   {
+      GitState::Reader gitState = reader.getRoot<LogEntry>().getGitState();
+      
+      return std::string(gitState.getRepoName());
+   }
+   
+   /// Produce the standard formatted string for this log type.
+   /** 
+     * \returns 0 on success
+     * \returns \<0 on error
+     */
+   static std::string msgString( git_state & msg /**< [out] The git_state to format.*/)
    {
       std::string str = msg.m_repoName + " GIT: ";
       str += msg.m_sha1;
@@ -172,8 +206,13 @@ struct text_log
    ///This log entry consists of unformatted text.
    std::string m_text;               
   
-   static int serialize( LogEntry::Builder & logEntry, ///< [out]
-                         const text_log  & msg         ///< [in] 
+   /// Serialize the text log into the cap'n proto buffer.
+   /**
+     * \returns 0 on success
+     * \returns \<0 on error
+     */
+   static int serialize( LogEntry::Builder & logEntry, ///< [out] The LogEntry holding the serialized log.  Initialized from builderT.
+                         const text_log  & msg         ///< [in] The text_log to log.
                        )
    {
       logEntry.setTextLog(logEntry.getTextLog());      
@@ -182,8 +221,13 @@ struct text_log
       return 0;
    }
    
-   static int unserialize( text_log & msg,             ///< [out] 
-                           LogEntry::Reader & logEntry ///< [in]
+   /// Un-serialize the cap'n proto buffer to read the text log
+   /**
+     * \returns 0 on success
+     * \returns \<0 on error
+     */
+   static int unserialize( text_log & msg,             ///< [out] The text_log from the log.
+                           LogEntry::Reader & logEntry ///< [in] The LogEntry holding the serialized log.
                          )
    {
       TextLog::Reader textLog = logEntry.getTextLog();
@@ -192,6 +236,11 @@ struct text_log
       return 0;
    }
 
+   /// Produce the standard formatted string for this log type.
+   /** 
+     * \returns 0 on success
+     * \returns \<0 on error
+     */
    static std::string msgString( text_log & msg )
    {
       return msg.m_text;
@@ -199,28 +248,175 @@ struct text_log
    
 };
 
-#if 0
-
-///User entered log, a string-type log.
+///A simple text log, entered by the user.
 /** \ingroup logtypes
   */
-struct user_log : public string_log
+struct user_log
 {
-   //Define the log name for use in the database
-   //Event: "User Log"
-   
-   ///The event code
-   static const eventCodeT eventCode = eventCodes::USER_LOG;
-
    ///The default level 
    static const logLevelT defaultLevel = logLevels::INFO;
    
-   static std::string msgString( messageT & msg /**< [in] the message, a std::string */)
+   ///This log entry consists of unformatted text.
+   std::string m_text;               
+  
+   /// Serialize the user log into the cap'n proto buffer.
+   /**
+     * \returns 0 on success
+     * \returns \<0 on error
+     */
+   static int serialize( LogEntry::Builder & logEntry, ///< [out] The LogEntry holding the serialized log.  Initialized from builderT.
+                         const user_log  & msg         ///< [in] The user_log to log.
+                       )
    {
-      std::string nmsg = "USER: ";
-      return nmsg + msg;
+      logEntry.setUserLog(logEntry.getUserLog());      
+      logEntry.getUserLog().setText(msg.m_text);
+      
+      return 0;
    }
+   
+   /// Un-serialize the cap'n proto buffer to read the user log
+   /**
+     * \returns 0 on success
+     * \returns \<0 on error
+     */
+   static int unserialize( user_log & msg,             ///< [out] The user_log from the log.
+                           LogEntry::Reader & logEntry ///< [in] The LogEntry holding the serialized log.
+                         )
+   {
+      TextLog::Reader userLog = logEntry.getUserLog();
+      msg.m_text = userLog.getText();
+      
+      return 0;
+   }
+
+   /// Produce the standard formatted string for this log type.
+   /** The format is 
+       \verbatim
+         USER: text...
+       \endverbatim
+     *
+     * \returns 0 on success
+     * \returns \<0 on error
+     */
+   static std::string msgString( user_log & msg )
+   {
+      return "USER: " + msg.m_text;
+   }
+   
 };
+
+
+///A software debug log
+/** \ingroup logtypes
+  */
+struct software_debug
+{
+   ///The default level 
+   static const logLevelT defaultLevel = logLevels::DEBUG;
+   
+   std::string m_file;
+   uint32_t m_linenum;
+   int32_t m_code;
+   std::string m_explanation;
+   
+   /// Serialize the software debug log into the cap'n proto buffer.
+   /**
+     * \returns 0 on success
+     * \returns \<0 on error
+     */
+   static int serialize( LogEntry::Builder & logEntry, ///< [out] The LogEntry holding the serialized log.  Initialized from builderT.
+                         const software_debug  & msg   ///< [in] The user_log to log.
+                       )
+   {
+      logEntry.setSoftwareDebug(logEntry.getSoftwareDebug()); 
+      return software_log::serialize_software_log( logEntry.getSoftwareDebug(), msg);
+   }
+   
+   /// Un-serialize the cap'n proto buffer to read the user log
+   /**
+     * \returns 0 on success
+     * \returns \<0 on error
+     */
+   static int unserialize( software_debug & msg,             ///< [out] The user_log from the log.
+                           LogEntry::Reader & logEntry ///< [in] The LogEntry holding the serialized log.
+                         )
+   {
+      return software_log::unserialize_software_log(msg, logEntry.getSoftwareDebug());
+   }
+
+   /// Produce the standard formatted string for this log type.
+   /** The format is 
+       \verbatim
+         USER: text...
+       \endverbatim
+     *
+     * \returns 0 on success
+     * \returns \<0 on error
+     */
+   static std::string msgString( software_debug & msg )
+   {
+      return software_log::msgString(msg);      
+   }
+   
+};
+
+
+///A software debug2 log
+/** \ingroup logtypes
+  */
+struct software_debug2
+{
+   ///The default level 
+   static const logLevelT defaultLevel = logLevels::DEBUG2;
+   
+   std::string m_file;
+   uint32_t m_linenum;
+   int32_t m_code;
+   std::string m_explanation;
+   
+   /// Serialize the software debug log into the cap'n proto buffer.
+   /**
+     * \returns 0 on success
+     * \returns \<0 on error
+     */
+   static int serialize( LogEntry::Builder & logEntry, ///< [out] The LogEntry holding the serialized log.  Initialized from builderT.
+                         const software_debug2  & msg   ///< [in] The user_log to log.
+                       )
+   {
+      logEntry.setSoftwareDebug2(logEntry.getSoftwareDebug2()); 
+      return software_log::serialize_software_log( logEntry.getSoftwareDebug2(), msg);
+   }
+   
+   /// Un-serialize the cap'n proto buffer to read the user log
+   /**
+     * \returns 0 on success
+     * \returns \<0 on error
+     */
+   static int unserialize( software_debug2 & msg,             ///< [out] The user_log from the log.
+                           LogEntry::Reader & logEntry ///< [in] The LogEntry holding the serialized log.
+                         )
+   {
+      return software_log::unserialize_software_log(msg, logEntry.getSoftwareDebug2());
+   }
+
+   /// Produce the standard formatted string for this log type.
+   /** The format is 
+       \verbatim
+         USER: text...
+       \endverbatim
+     *
+     * \returns 0 on success
+     * \returns \<0 on error
+     */
+   static std::string msgString( software_debug2 & msg )
+   {
+      return software_log::msgString(msg);      
+   }
+   
+};
+
+#if 0
+
 
 
 ///Software DEBUG log entry
