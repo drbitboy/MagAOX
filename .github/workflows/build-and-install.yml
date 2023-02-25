@@ -1,0 +1,27 @@
+name: Build and install
+name: Install the MagAO-X software on Ubuntu 20.04 LTS
+on: [push]
+jobs:
+  build:
+    strategy:
+      matrix:
+        container: ["ubuntu:20.04", "centos:7.9.2009"]
+    runs-on: ubuntu-latest
+    env:
+      MAGAOX_ROLE: ci
+    container:
+      image: ${{ matrix.container }}
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3.3.0
+      - name: Cache dependencies 
+        uses: actions/cache@v3
+        with:
+          path: /opt/MagAOX/
+          key: ${{ matrix.container }}-dependencies-cache-v1-${{ hashFiles('setup/*', 'setup/**/*') }}
+      - run: 'pwd'
+      - run: 'ls'
+      - name: Auto-provision
+        run: 'bash -lx setup/provision.sh'
+      - name: Install MagAO-X
+        run: 'bash -l setup/steps/install_MagAOX.sh ci'
