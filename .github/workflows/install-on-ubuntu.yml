@@ -1,10 +1,12 @@
-name: Install the MagAO-X software on CentOS 7.9
+name: Install the MagAO-X software on Ubuntu 20.04 LTS
 on: [push]
 jobs:
   install-on-centos:
     runs-on: ubuntu-latest
     env:
       MAGAOX_ROLE: ci
+    container:
+      image: ubuntu:20.04
     steps:
       - name: Check out repository code
         uses: actions/checkout@v2
