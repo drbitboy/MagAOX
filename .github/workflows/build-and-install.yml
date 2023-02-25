@@ -1,5 +1,4 @@
 name: Build and install
-name: Install the MagAO-X software on Ubuntu 20.04 LTS
 on: [push]
 jobs:
   build:
