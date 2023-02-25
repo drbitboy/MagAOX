@@ -2,7 +2,9 @@ name: Install the MagAO-X software on CentOS 7.9
 on: [push]
 jobs:
   install-on-centos:
-    runs-on: centos:7.9.2009
+    runs-on: ubuntu-latest
+    container:
+      image: centos:7.9.2009
     steps:
       - name: Check out repository code
         uses: actions/checkout@v2
