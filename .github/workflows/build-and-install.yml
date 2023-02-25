@@ -1,7 +1,7 @@
 name: Build and install
 on: [push]
 jobs:
-  build:
+  install-dependencies:
     strategy:
       matrix:
         # container: ["ubuntu:22.04", "centos:7.9.2009"]
@@ -15,14 +15,33 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v3.3.0
-      - name: Cache dependencies 
+      - name: Cache dependencies
         uses: actions/cache@v3
         with:
           path: /opt/MagAOX/
           key: ${{ matrix.container }}-dependencies-cache-v1-${{ hashFiles('setup/*', 'setup/**/*') }}
       - run: 'pwd'
       - run: 'ls'
-      - name: Auto-provision
+      - name: Install all dependencies
         run: 'bash -lx setup/provision.sh'
+  install-magao-x:
+    needs: install-dependencies
+    strategy:
+      matrix:
+        # container: ["ubuntu:22.04", "centos:7.9.2009"]
+        container: ["centos:7.9.2009"]
+    runs-on: ubuntu-latest
+    env:
+      MAGAOX_ROLE: ci
+    container:
+      image: ${{ matrix.container }}
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3.3.0
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: /opt/MagAOX/
+          key: ${{ matrix.container }}-dependencies-cache-v1-${{ hashFiles('setup/*', 'setup/**/*') }}
       - name: Install MagAO-X
         run: 'bash -l setup/steps/install_MagAOX.sh ci'
