@@ -4,7 +4,8 @@ jobs:
   build:
     strategy:
       matrix:
-        container: ["ubuntu:22.04", "centos:7.9.2009"]
+        # container: ["ubuntu:22.04", "centos:7.9.2009"]
+        container: ["centos:7.9.2009"]
     runs-on: ubuntu-latest
     env:
       MAGAOX_ROLE: ci
