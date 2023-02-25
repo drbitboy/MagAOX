@@ -9,6 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MAGAOX_ROLE: ci
+      DEBIAN_FRONTEND: noninteractive
     container:
       image: ${{ matrix.container }}
     steps:
