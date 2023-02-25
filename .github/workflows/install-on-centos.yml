@@ -15,7 +15,7 @@ jobs:
           key: ${{ runner.os }}-dependencies-cache-v1-${{ hashFiles('setup/*', 'setup/**/*') }}
       - run: 'pwd'
       - run: 'ls'
-      - run: 'bash -x setup/steps/install_centos7_packages.sh'
+      - run: 'bash -x setup/steps/install_centos_7_packages.sh'
         name: Install OS dependencies
       - run: 'bash -lx setup/provision.sh'
         name: Auto-provision
