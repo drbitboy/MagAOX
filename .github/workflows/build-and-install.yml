@@ -20,6 +20,7 @@ jobs:
         with:
           path: /opt/MagAOX/
           key: ${{ matrix.container }}-dependencies-cache-v1-${{ hashFiles('setup/*', 'setup/**/*') }}
+      - run: 'df -h'
       - run: 'pwd'
       - run: 'ls'
       - name: Install all dependencies
