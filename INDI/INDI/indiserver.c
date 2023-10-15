@@ -1037,7 +1037,11 @@ static void indiFIFO(void)
 int isDeviceInDriver(const char *dev, DvrInfo *dp)
 {
     int i = 0;
-    for (i=0; i < dp->ndev && strcmp(dev,dp->dev[i]); ++i) { return 1; }
+    for (i = 0; i < dp->ndev; i++)
+    {
+        if (!strcmp(dev, dp->dev[i])) { return 1; }
+    }
+
     return 0;
 }
 
