@@ -714,7 +714,7 @@ static void startRemoteDvr(DvrInfo *dp)
 
     if (verbose > 0)
         fprintf(stderr, "%s: Driver %s: new, remote, socket=%d\n", indi_tstamp(NULL), dp->name, sockfd);
-}
+} /* static void startRemoteDvr(DvrInfo *dp) */
 
 /* start the given local INDI driver process.
  * exit if trouble.
@@ -773,7 +773,7 @@ static void startLocalDvr(DvrInfo *dp)
     if (verbose > 0)
         fprintf(stderr, "%s: Driver %s: new, local, pid=%d rfd=%d wfd=%d\n", indi_tstamp(NULL), dp->name, dp->pid, dp->rfd,
                 dp->wfd);
-}
+} /* static void startLocalDvr(DvrInfo *dp) */
 
 /* start the given INDI driver process or connection.
  * exit if trouble.
@@ -877,7 +877,7 @@ static void shutdownDvr(DvrInfo *dp, int restart)
                    , dp->restartDelayus / ((double)Mus));
         }
     }
-}
+} /* static void shutdownDvr(DvrInfo *dp, int restart) */
 
 /* write the next chunk of the current message in the queue to the given
  * driver. pop message from queue when complete and free the message if we are
@@ -964,7 +964,7 @@ static int sendDriverMsg(DvrInfo *dp)
     }
 
     return 0;
-}
+} /* static int sendDriverMsg(DvrInfo *dp) */
 
 /* create the public INDI Driver endpoint lsocket on port.
  * return server socket else exit.
@@ -1013,7 +1013,7 @@ static void indiListen()
     lsocket = sfd;
     if (verbose > 0)
         fprintf(stderr, "%s: listening to port %d on fd %d\n", indi_tstamp(NULL), port, sfd);
-}
+} /* static void indiListen() */
 
 /* Attempt to open up FIFO */
 static void indiFIFO(void)
@@ -1259,7 +1259,7 @@ static void newFIFO(void)
             }
         }
     } /* while (i < MAXRBUF) */
-}
+} /* static void newFIFO(void) */
 
 /* block to accept a new client arriving on lsocket.
  * return private nonblocking socket or exit.
@@ -1340,7 +1340,7 @@ static void newClient()
     fprintf(stderr, "CLIENTS %d\n", active);
     fflush(stderr);
 #endif
-}
+} /* static int newClSocket() */
 
 /* print key attributes and values of the given xml to stderr.
  */
@@ -1384,7 +1384,7 @@ static void traceMsg(XMLEle *root, char* ts)
     }
 
     fprintf(stderr, "\n");
-}
+} /* static void traceMsg(XMLEle *root, char* ts) */
 
 /* add the given device and property to the devs[] list of client if new.
  */
@@ -1485,7 +1485,7 @@ static void q2RDrivers(const char *dev, Msg *mp, XMLEle *root)
         }
 
         /* Only send message to each *unique* remote driver at a particular host:port
-         * Since it will be propogated to all other devices there */
+         * Since it will be propagated to all other devices there */
         if (!dev[0] && isRemote && !strcmp(lastRemoteHost, dp->host) && lastRemotePort == dp->port)
         {
             continue;
@@ -1512,7 +1512,7 @@ static void q2RDrivers(const char *dev, Msg *mp, XMLEle *root)
                     dp->name, tagXMLEle(root), findXMLAttValu(root, "device"), findXMLAttValu(root, "name"));
         }
     }
-}
+} /*  static void q2RDrivers(const char *dev, Msg *mp, XMLEle *root) */
 
 /* return Property if dp is snooping dev/name, else NULL.
  */
@@ -1578,7 +1578,7 @@ static void q2SDrivers(DvrInfo *me, int isblob, const char *dev, const char *nam
                     tagXMLEle(root), findXMLAttValu(root, "device"), findXMLAttValu(root, "name"));
         }
     }
-}
+} /*  static void q2SDrivers(DvrInfo *me, int isblob, const char *dev, const char *name, Msg *mp, XMLEle *root) */
 
 /* read more from the given client, send to each appropriate driver when see
  * xml closure. also send all newXXX() to all other interested clients.
@@ -1688,7 +1688,7 @@ static int readFromClient(ClInfo *cp)
     }
 
     return (shutany ? -1 : 0);
-}
+} /*  static void q2SDrivers(DvrInfo *me, int isblob, const char *dev, const char *name, Msg *mp, XMLEle *root) */
 
 /* add dev/name to dp's snooping list.
  * init with blob mode set to B_NEVER.
@@ -1789,7 +1789,7 @@ static int q2Servers(DvrInfo *me, Msg *mp, XMLEle *root)
     }
 
     return (shutany ? -1 : 0);
-}
+} /*  static int q2Servers(DvrInfo *me, Msg *mp, XMLEle *root) */
 
 /* log message in root known to be from device dev to ldir, if any.
  */
@@ -1956,7 +1956,7 @@ static int readFromDriver(DvrInfo *dp)
     free(nodes);
 
     return (shutany ? -1 : 0);
-}
+} /*  static int readFromDriver(DvrInfo *dp) */
 
 /****************************************************/
 /* Setup routines for select(...) call in indiRun() */
@@ -2285,4 +2285,4 @@ int main(int ac, char *av[])
     /* whoa! */
     fprintf(stderr, "unexpected return from main\n");
     return 1;
-}
+} /*  int main(int ac, char *av[]) */
