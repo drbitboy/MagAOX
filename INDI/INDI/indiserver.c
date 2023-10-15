@@ -265,6 +265,7 @@ static DvrInfo *allocDvr()
 
     /* try to reuse a driver slot, else add one */
     for (dvi = 0; dvi < ndvrinfo && dvrinfo[dvi].active; dvi++) { ; }
+    dp = dvrinfo + dvi;
     if (dvi == ndvrinfo)
     {
         /* grow dvrinfo */
