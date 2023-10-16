@@ -263,24 +263,23 @@ static DvrInfo *allocDvr()
     DvrInfo *dp = NULL;
     int dvi;
 
-    /* try to reuse a driver slot, else add one */
+    /* Try to reuse a driver slot, else add one */
     for (dvi = 0; dvi < ndvrinfo && dvrinfo[dvi].active; dvi++) { ; }
-    dp = dvrinfo + dvi;
     if (dvi == ndvrinfo)
     {
-        /* grow dvrinfo */
-        dvrinfo = (DvrInfo *)realloc(dvrinfo, (ndvrinfo + 1) * sizeof(DvrInfo));
+        /* Grow dvrinfo if all slots active; abort if allocation fails */
+        dvrinfo = (DvrInfo *)realloc(dvrinfo, ++ndvrinfo * sizeof(DvrInfo));
         if (!dvrinfo)
         {
             fprintf(stderr, "no memory for new drivers\n");
             Bye();
         }
-        dp = dvrinfo + ndvrinfo++;
     }
+    dp = dvrinfo + dvi;
 
     if (dp == NULL) { return NULL; }
 
-    /* rig up new dvrinfo entry */
+    /* Rig up new dvrinfo entry */
     memset(dp, 0, sizeof(*dp));
     dp->active = 1;
     dp->ndev   = 0;
@@ -337,8 +336,7 @@ static Msg *newMsg(void)
 /* free Msg mp and everything it contains */
 static void freeMsg(Msg *mp)
 {
-    if (mp->cp && mp->cp != mp->buf)
-        free(mp->cp);
+    if (mp->cp && mp->cp != mp->buf) { free(mp->cp); }
     free(mp);
 }
 
@@ -356,12 +354,10 @@ static void shutdownClient(ClInfo *cp)
     free(cp->props);
 
     /* decrement and possibly free any unsent messages for this client */
-    while ((mp = (Msg *)popFQ(cp->msgq)) != NULL)
-        if (--mp->count == 0)
-            freeMsg(mp);
+    while ((mp=popFQ(cp->msgq))) { if(!--mp->count) { freeMsg(mp); } }
     delFQ(cp->msgq);
 
-    /* ok now to recycle */
+    /* Allow reuse later */
     cp->active = 0;
 
     if (verbose > 0)
@@ -400,12 +396,13 @@ static int sendClientMsg(ClInfo *cp)
     /* shut down if trouble */
     if (nw <= 0)
     {
-        if (nw == 0)
-            fprintf(stderr, "%s: Client %d: write returned 0\n", indi_tstamp(NULL), cp->s);
-        else
-            fprintf(stderr, "%s: Client %d: write: returned<0[%s]\n", indi_tstamp(NULL), cp->s, strerror(errno));
+        fprintf(stderr, "%s: Client %d: write: returned%c0[%s]\n"
+               , indi_tstamp(NULL), cp->s
+               , nw ? '<' : ' '
+               , nw ? strerror(errno) : "which is an implicit error"
+               );
         shutdownClient(cp);
-        return (-1);
+        return -1;
     }
 
     /* trace */
@@ -454,8 +451,7 @@ static int sendClientMsg(ClInfo *cp)
     cp->nsent += nw;
     if (cp->nsent == mp->cl)
     {
-        if (--mp->count == 0)
-            freeMsg(mp);
+        if (--mp->count == 0) { freeMsg(mp); }
         popFQ(cp->msgq);
         cp->nsent = 0;
     }
@@ -545,7 +541,7 @@ static int q2Clients(ClInfo *notme, int isblob, const char *dev, const char *nam
                     }
                 }
 
-                if ((blob_found && pp->blob == B_NEVER) || (blob_found == 0 && cp->blob == B_NEVER))
+                if ((blob_found && pp->blob == B_NEVER) || (!blob_found && cp->blob == B_NEVER))
                     continue;
             }
             else if (cp->blob == B_NEVER)
@@ -836,7 +832,7 @@ static void shutdownDvr(DvrInfo *dp, int restart)
     if (dp->dev) { free(dp->dev); dp->dev = NULL; }
     if (dp->lp) { delLilXML(dp->lp); dp->lp = NULL; }
 
-    /* ok now to recycle */
+    /* Allow reuse later */
     dp->active = 0;
 
     /* decrement and possibly free any unsent messages for this client */
@@ -868,7 +864,7 @@ static void shutdownDvr(DvrInfo *dp, int restart)
             *ppdvr = dp;
             dp->pNextToRestart = NULL;     /* terminate linked list */
 
-            /* Prevent recylcing, set 10s delay until restart */
+            /* Prevent later reuse, set 10s delay until restart */
             dp->active = 1;
             dp->restartDelayus = 10 * Mus;
 
@@ -902,10 +898,11 @@ static int sendDriverMsg(DvrInfo *dp)
     /* restart if trouble */
     if (nw <= 0)
     {
-        if (nw == 0)
-            fprintf(stderr, "%s: Driver %s[wfd=%d]: write returned 0\n", indi_tstamp(NULL), dp->name, dp->wfd);
-        else
-            fprintf(stderr, "%s: Driver %s[wfd=%d]: write: return <0 [%s]\n", indi_tstamp(NULL), dp->name, dp->wfd, strerror(errno));
+        fprintf(stderr, "%s: Driver %s[wfd=%d]: write returned%c0[%s]\n"
+               , indi_tstamp(NULL), dp->name, dp->wfd
+               , nw ? '<' : ' '
+               , nw ? strerror(errno) : "which is an implicit error"
+               );
         shutdownDvr(dp, 1);
         return -1;
     }
@@ -957,8 +954,7 @@ static int sendDriverMsg(DvrInfo *dp)
     dp->nsent += nw;
     if (dp->nsent == mp->cl)
     {
-        if (--mp->count == 0)
-            freeMsg(mp);
+        if (--mp->count == 0) { freeMsg(mp); }
         popFQ(dp->msgq);
         dp->nsent = 0;
     }
@@ -1223,7 +1219,8 @@ static void newFIFO(void)
                 dp->name[MAXINDINAME-1] = '\0';
             }
 
-            if (remoteDriver == 0)
+            if (remoteDriver) { startRemoteDvr(dp); }
+            else
             {
                 strncpy(dp->envDev, tName, MAXSBUF);
                 strncpy(dp->envConfig, envConfig, MAXSBUF);
@@ -1234,10 +1231,6 @@ static void newFIFO(void)
                 dp->envSkel[MAXSBUF-1] = '\0';
                 dp->envPrefix[MAXSBUF-1] = '\0';
                 startDvr(dp);
-            }
-            else
-            {
-                startRemoteDvr(dp);
             }
         }
         else
@@ -1255,7 +1248,7 @@ static void newFIFO(void)
                 removeDvrFromRestartList(dp);
 
                 /* If device name is given, check against it before shutting down */
-                if (tName[0] && isDeviceInDriver(tName, dp) == 0) { continue; }
+                if (tName[0] && !isDeviceInDriver(tName, dp)) { continue; }
                 if (verbose) { fprintf(stderr, "%s: FIFO: Shutting down driver: %s\n", ts, tDriver); }
                 shutdownDvr(dp, 0);
                 if (verbose) { fprintf(stderr, "%s: FIFO: Driver Shut down complete: %s\n", ts, tDriver); }
@@ -1480,7 +1473,7 @@ static void q2RDrivers(const char *dev, Msg *mp, XMLEle *root)
     {
         int isRemote = (dp->pid == REMOTEDVR);
 
-        if (dp->active == 0 || dp->restartDelayus > 0) { continue; }
+        if (!dp->active || dp->restartDelayus > 0) { continue; }
 
         /* driver known to not support this dev */
         if (dev[0] && dev[0] != '*' && !isDeviceInDriver(dev, dp))
@@ -1675,10 +1668,8 @@ static int readFromClient(ClInfo *cp)
             }
 
             /* set message content if anyone cares else forget it */
-            if (mp->count > 0)
-                setMsgXMLEle(mp, root);
-            else
-                freeMsg(mp);
+            if (mp->count > 0) { setMsgXMLEle(mp, root); }
+            else { freeMsg(mp); }
             delXMLEle(root);
         }
         else if (err[0])
@@ -1761,17 +1752,13 @@ static int q2Servers(DvrInfo *me, Msg *mp, XMLEle *root)
             break;
 
             // All props are requested. This is client-only mode (not upstream server)
-            case 1:
-                break;
+            case 1: break;
             // Upstream server mode
-            case 2:
-                devFound = 1;
-                break;
+            case 2: devFound = 1; break;
         }
 
         // If no matching device found, continue
-        if (devFound == 0)
-            continue;
+        if (!devFound) { continue; }
 
         /* shut down this client if its q is already too large */
         ql = msgQSize(cp->msgq);
@@ -1918,7 +1905,7 @@ static int readFromDriver(DvrInfo *dp)
         }
 
         /* Found a new device? Let's add it to driver info */
-        if (dev[0] && isDeviceInDriver(dev, dp) == 0)
+        if (dev[0] && !isDeviceInDriver(dev, dp))
         {
             dp->dev           = (char **)realloc(dp->dev, (dp->ndev + 1) * sizeof(char *));
             dp->dev[dp->ndev] = (char *)malloc(MAXINDIDEVICE * sizeof(char));
@@ -2253,8 +2240,7 @@ int main(int ac, char *av[])
 #endif
 
     /* at this point there are ac args in av[] to name our drivers */
-    if (ac == 0 && !fifo.name)
-        usage();
+    if (ac == 0 && !fifo.name) { usage(); }
 
     /* take care of some unixisms */
     noSIGPIPE();
