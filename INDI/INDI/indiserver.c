@@ -1405,11 +1405,13 @@ static void addClDevice(ClInfo *cp, const char *dev, const char *name, int isblo
     cp->props = (Property *)realloc(cp->props, (cp->nprops + 1) * sizeof(Property));
     Property *pp = cp->props + cp->nprops++;
 
+    /*
     strncpy(pp->dev, dev, MAXINDIDEVICE);
     pp->dev[MAXINDIDEVICE-1] = '\0';
 
     strncpy(pp->name, name, MAXINDINAME);
     pp->name[MAXINDINAME-1] = '\0';
+    */
 
     pp->blob = B_NEVER;
 }
