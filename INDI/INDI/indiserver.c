@@ -1830,6 +1830,8 @@ static int q2Servers(DvrInfo *me, Msg *mp, XMLEle *root)
         if (!cp->active)
             continue;
 
+	devFound = 0;
+
         // Only send the message to the upstream server that is connected specfically to the device in driver dp
         switch (cp->allprops)
         {
