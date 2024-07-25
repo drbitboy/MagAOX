@@ -53,6 +53,7 @@
 #include "indidevapi.h"
 #include "lilxml.h"
 
+#include <zlib.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <libgen.h>
@@ -129,10 +130,12 @@ typedef struct
     int nprops;         /* n entries in props[] */
     int allprops;       /* saw getProperties w/o device */
     BLOBHandling blob;  /* when to send setBLOBs */
-    int s;              /* socket for this client */
+    int s;              /* file descriptor of socket for this client */
     LilXML *lp;         /* XML parsing context */
     FQ *msgq;           /* Msg queue */
     unsigned int nsent; /* bytes of current Msg sent so far */
+    gzFile gzfird;      /* zlib gzread proxy for file desc */
+    gzFile gzfiwr;      /* zlib gzwrite proxy for file desc */
 } ClInfo;
 static ClInfo *clinfo; /*  malloced pool of clients */
 static int nclinfo;    /* n total (not active) */
@@ -1348,13 +1351,26 @@ static int newClSocket()
     struct sockaddr_in cli_socket;
     socklen_t cli_len;
     int cli_fd;
+    int retGET = 0;
+    int retSET = 0;
 
-    /* get a private connection to new client */
+    /* get a private non-blocking connection to new client */
     cli_len = sizeof(cli_socket);
+    errno = 0;
     cli_fd  = accept(lsocket, (struct sockaddr *)&cli_socket, &cli_len);
-    if (cli_fd < 0)
+    retGET = fcntl(cli_fd, F_GETFL);
+    retSET = fcntl(cli_fd, F_SETFL, retGET | O_RDWR | O_NONBLOCK);
+    if (cli_fd < 0 || retGET < 0 | retSET < 0)
     {
-        fprintf(stderr, "accept: %s\n", strerror(errno));
+        fprintf(stderr, "%s: %d=accept(...)"
+                        "; %d=fcntl(%d, F_GETFD)"
+                        "; %d=fcntl(%d, F_SETFD, %d | O_NONBLOCK)"
+                        "; %d=errno[%s]\n"
+                      , indi_tstamp(NULL), cli_fd
+                      , retGET, cli_fd
+                      , retSET, cli_fd, retGET
+                      , errno, strerror(errno)
+               );
         Bye();
     }
 
@@ -1396,6 +1412,9 @@ static void newClient()
     memset(cp, 0, sizeof(*cp));
     cp->active = 1;
     cp->s      = s;
+    cp->gzfird = NULL;
+    cp->gzfird = gzdopen(cp->s, "r");// gzbuffer(cp->gzfird, 16);
+    cp->gzfiwr = NULL;
     cp->lp     = newLilXML();
     cp->msgq   = newFQ(1);
     cp->props  = malloc(1);
@@ -1406,8 +1425,12 @@ static void newClient()
         struct sockaddr_in addr;
         socklen_t len = sizeof(addr);
         getpeername(s, (struct sockaddr *)&addr, &len);
-        fprintf(stderr, "%s: Client %d: new arrival from %s:%d - welcome!\n", indi_tstamp(NULL), cp->s,
-                inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
+        fprintf(stderr, "%s: Client %d: new arrival from %s:%d"
+                        "(zlib compression%s available)"
+                        " - welcome!\n", indi_tstamp(NULL), cp->s,
+                inet_ntoa(addr.sin_addr), ntohs(addr.sin_port)
+                , cp->gzfird ? "" : " not"
+               );
     }
 #ifdef OSX_EMBEDED_MODE
     int active = 0;
@@ -1647,13 +1670,25 @@ static int readFromClient(ClInfo *cp)
     ssize_t i, nr;
 
     /* read client */
-    nr = read(cp->s, buf, sizeof(buf));
+    errno = 0;
+    if (cp->gzfird)
+    {
+        gzclearerr(cp->gzfird);
+        nr = gzread(cp->gzfird, buf, sizeof(buf));
+    }
+    else
+    {
+        nr = read(cp->s, buf, sizeof(buf));
+    }
     if (nr <= 0)
     {
         if (nr < 0)
             fprintf(stderr, "%s: Client %d: read: %s\n", indi_tstamp(NULL), cp->s, strerror(errno));
         else if (verbose > 0)
-            fprintf(stderr, "%s: Client %d: read EOF\n", indi_tstamp(NULL), cp->s);
+        {
+            //fprintf(stderr, "%s: Client %d: read EOF\n", indi_tstamp(NULL), cp->s);
+            fprintf(stderr, "%s: Client %d: read EOF[%s]\n", indi_tstamp(NULL), cp->s, strerror(errno));
+        }
         shutdownClient(cp);
         return (-1);
     }
