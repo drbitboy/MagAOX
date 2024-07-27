@@ -894,7 +894,7 @@ static void shutdownDvr(DvrInfo *dp, int restart)
     Msg *mp;
     int i = 0;
 
-    // Tell client driver is dead.
+    // Tell any snooping clients that driver is dead.
     for (i = 0; i < dp->ndev; i++)
     {
         /* Inform clients that this driver is dead */
@@ -1299,14 +1299,17 @@ static void newFIFO(void)
             else
                 startRemoteDvr(dp);
         }
-        else
+        else  // stop <tDriver>[ -<options>]
         {
             for (dp = dvrinfo; dp < &dvrinfo[ndvrinfo]; dp++)
             {
                 fprintf(stderr, "%s: dp->name: %s - tDriver: %s\n", ts, dp->name, tDriver);
                 if (!strcmp(dp->name, tDriver) && dp->active == 1)
                 {
-                    fprintf(stderr, "%s: name: %s - dp->dev[0]: %s\n", ts, tName, dp->dev[0]);
+                    fprintf(stderr, "%s: name: %s - dp->dev[0]: %s\n"
+                                  , ts, tName
+                                  , dp->ndev ? dp->dev[0] : "<no device name yet>"
+                           );
 
                     /* If device name is given, check against it before shutting down */
                     //if (tName[0] && strcmp(dp->dev[0], tName))
