@@ -164,6 +164,8 @@ typedef struct strDvrInfo
     unsigned int nsent; /* bytes of current Msg sent so far */
     struct strDvrInfo* pNextToRestart; /* next to restart, or NULL */
     int restartDelayus; /* Microseconds before next restart attempt */
+    gzFile gzfird;      /* zlib gzread proxy for file desc */
+    gzFile gzfiwr;      /* zlib gzwrite proxy for file desc */
 } DvrInfo, *pDvr, **ppDvr;
 static DvrInfo *dvrinfo; /* malloced array of drivers */
 static int ndvrinfo;     /* n total */
@@ -356,7 +358,31 @@ static int openINDIServer(char host[], int indi_port)
     if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
     {
         fprintf(stderr, "connect(%s,%d): %s\n", host, indi_port, strerror(errno));
-        /* Drop thru with valid but unconnected fd, instead of Bye(); */
+        /* Drop thru with valid but unconnected fd, instead of Bye();
+         * errno will be non-zero, which will cause trigger calling code
+         * to shut down this driver
+         */
+    }
+    else
+    {
+        /* Make connected socket non-blocking */
+        int retGET;
+        int retSET;
+        retGET = fcntl(sockfd, F_GETFL);
+        retSET = fcntl(sockfd, F_SETFL, retGET | O_RDWR | O_NONBLOCK);
+        if (retGET < 0 | retSET < 0)
+        {
+            fprintf(stderr, "%s: %d=connect(...)"
+                            "; %d=fcntl(%d, F_GETFL)"
+                            "; %d=fcntl(%d, F_SETFL, %d | O_RDWR | O_NONBLOCK)"
+                            "; %d=errno[%s]\n"
+                          , indi_tstamp(NULL), sockfd
+                          , retGET, sockfd
+                          , retSET, sockfd, retGET
+                          , errno, strerror(errno)
+                   );
+            /* Same drop thru logic as above (non-zero errno) */
+        }
     }
 
     /* ok */
@@ -378,6 +404,74 @@ static void freeMsg(Msg *mp)
     free(mp);
 }
 
+/* Shut down read and write ends of an INDI connection
+   - If it is a socket, then it is bidirectional and
+     the read and write file descriptors will be the same
+   - There nay be a gzFile pointers for either or both;
+     these will be closed
+ */
+static void closeIndiconnection(ClInfo* cp, DvrInfo* dp)
+{
+    int wfd = cp ? cp->s : (dp ? dp->wfd : -1);
+    int rfd = cp ? cp->s : (dp ? dp->rfd : -1);
+    int wfdvalid = wfd > -1;
+    int rfdvalid = rfd > -1;
+    int isbidir = rfd == wfd;
+    gzFile gzfird = cp ? cp->gzfird : (dp ? dp->gzfird : NULL);
+    gzFile gzfiwr = cp ? cp->gzfiwr : (dp ? dp->gzfiwr : NULL);
+
+    /* If read and write FDs (file descriptors) are valid and the same,
+     * then assume it's a bidirectional socket and shut it down
+     */
+    if (wfdvalid && isbidir) { shutdown(wfd, SHUT_RDWR); }
+    /* N.B. that does not close the socket; that is done next */
+
+    /* Shut down write side of INDI connection */
+    errno = 0;
+    if (wfdvalid)
+    {
+        if (gzfiwr)
+        {
+            gzflush(gzfiwr, Z_FINISH);
+            gzclose(gzfiwr);
+        }
+        else
+        {
+            close(wfd);
+        }
+    }
+
+    errno = 0;
+    if (!gzfird)
+    {
+        /* Unless EITHER the socket is bidirectional and it was closed
+         * above, OR the read FD is not valid, the read FD does not need
+         * to be closed; otherwise close it here:
+         */
+        if (!isbidir && rfdvalid) { close(rfd); }
+
+        /* At this point the read gzFile pointer is null, so there is
+         * nothing more to do:
+         */
+        return;
+    }
+
+    /* To here the read gzFile pointer needs to be closed.
+     * If the read FD was already closed by the write logic above, then
+     * create an open FD to stand in for it so the gzclose call on the
+     * read side will have something to close
+     */
+    if (isbidir)
+    {
+        int pair[2];
+        int pipertn = pipe(pair);
+        dup2(pair[0], rfd);
+        close(pair[1]);
+    }
+
+    gzclose(gzfird);                 /* Close the read gzFile pointer */
+} // static void closeIndiconnection(ClInfo* cp, DvrInfo* dp)
+
 /* close down the given client */
 static void shutdownClient(ClInfo *cp)
 {
@@ -385,7 +479,7 @@ static void shutdownClient(ClInfo *cp)
 
     /* close socket connection */
     shutdown(cp->s, SHUT_RDWR);
-    close(cp->s);
+    closeIndiconnection(cp, NULL);
 
     /* free memory */
     delLilXML(cp->lp);
@@ -771,6 +865,10 @@ static void startRemoteDvr(DvrInfo *dp)
     dp->port    = indi_port;
     dp->rfd     = sockfd;
     dp->wfd     = sockfd;
+    dp->gzfird  = NULL;
+    dp->gzfiwr  = NULL;
+    dp->gzfird = gzdopen(dp->rfd, "r");
+    //dp->gzfiwr = gzdopen(dp->wfd, "w");
     dp->lp      = newLilXML();
     dp->msgq    = newFQ(1);
     dp->sprops  = (Property *)malloc(1); /* seed for realloc */
@@ -850,6 +948,8 @@ static void startLocalDvr(DvrInfo *dp)
     dp->port    = -1;
     dp->wfd     = fdstdin;
     dp->rfd     = fdstdout;
+    dp->gzfird  = NULL;
+    dp->gzfiwr  = NULL;
 #   if 0
     dp->efd     = fdctrl;
 #   endif/*0*/
@@ -915,21 +1015,7 @@ static void shutdownDvr(DvrInfo *dp, int restart)
     }
 
     /* reclaim resources (connections) */
-    if (dp->pid == REMOTEDVR)
-    {
-        /* close socket connection */
-        shutdown(dp->wfd, SHUT_RDWR);
-        close(dp->wfd); /* same as rfd */
-    }
-    else
-    {
-        /* close local named FIFOs */
-        close(dp->wfd);
-        close(dp->rfd);
-#       if 0
-        close(dp->efd);
-#       endif/*0*/
-    }
+    closeIndiconnection(NULL, dp);
 
 #ifdef OSX_EMBEDED_MODE
     fprintf(stderr, "STOPPED \"%s\"\n", dp->name);
@@ -1366,8 +1452,8 @@ static int newClSocket()
     if (cli_fd < 0 || retGET < 0 | retSET < 0)
     {
         fprintf(stderr, "%s: %d=accept(...)"
-                        "; %d=fcntl(%d, F_GETFD)"
-                        "; %d=fcntl(%d, F_SETFD, %d | O_NONBLOCK)"
+                        "; %d=fcntl(%d, F_GETFL)"
+                        "; %d=fcntl(%d, F_SETFL, %d | O_RDWR | O_NONBLOCK)"
                         "; %d=errno[%s]\n"
                       , indi_tstamp(NULL), cli_fd
                       , retGET, cli_fd
@@ -1416,8 +1502,9 @@ static void newClient()
     cp->active = 1;
     cp->s      = s;
     cp->gzfird = NULL;
-    cp->gzfird = gzdopen(cp->s, "r");// gzbuffer(cp->gzfird, 16);
     cp->gzfiwr = NULL;
+    cp->gzfird = gzdopen(cp->s, "r");// gzbuffer(cp->gzfird, 16);
+    //cp->gzfiwr = gzdopen(cp->s, "w");// gzbuffer(cp->gzfird, 16);
     cp->lp     = newLilXML();
     cp->msgq   = newFQ(1);
     cp->props  = malloc(1);
@@ -1974,7 +2061,16 @@ static int readFromDriver(DvrInfo *dp)
     int inode = 0;
 
     /* read driver */
-    nr = read(dp->rfd, buf, sizeof(buf));
+    errno = 0;
+    if (dp->gzfird)
+    {
+        gzclearerr(dp->gzfird);
+        nr = gzread(dp->gzfird, buf, sizeof(buf));
+    }
+    else
+    {
+        nr = read(dp->rfd, buf, sizeof(buf));
+    }
     if (nr <= 0)
     {
         if (nr < 0)
