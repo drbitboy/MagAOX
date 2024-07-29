@@ -893,7 +893,7 @@ static void startRemoteDvr(DvrInfo *dp)
     pushFQ(dp->msgq, mp);
     if (dev[0])
         sprintf(buf, "<getProperties"
-                     "%s"  // device='<dp->dev[0]>' or device='*'
+                     " device='%s'"  // device='<dp->dev[0]>' or device='*'
                      "%s"  // message='~~gzready~~' or nothing
                      " version='%g'/>\n"
 
@@ -901,7 +901,7 @@ static void startRemoteDvr(DvrInfo *dp)
                    // connecting to (accepting) an upstream server and
                    // not a regular client. The difference is in how it
                    // treats snooping properties among properties.
-                   , dev[0] ? dp->dev[0] : " device='*'"
+                   , dev[0] ? dp->dev[0] : "*"
 
                    // " message='~~gzready~~'" informs downstream server
                    // that the upstream connection is reading data using
