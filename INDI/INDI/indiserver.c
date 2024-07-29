@@ -892,12 +892,25 @@ static void startRemoteDvr(DvrInfo *dp)
     mp = newMsg();
     pushFQ(dp->msgq, mp);
     if (dev[0])
-        sprintf(buf, "<getProperties device='%s' version='%g'/>\n", dp->dev[0], INDIV);
-    else
-        // This informs downstream server that it is connecting to an upstream server
-        // and not a regular client. The difference is in how it treats snooping properties
-        // among properties.
-        sprintf(buf, "<getProperties device='*' version='%g'/>\n", INDIV);
+        sprintf(buf, "<getProperties"
+                     "%s"  // device='<dp->dev[0]>' or device='*'
+                     "%s"  // message='~~gzready~~' or nothing
+                     " version='%g'/>\n"
+
+                   // " device='*'" informs downstream server that it is
+                   // connecting to (accepting) an upstream server and
+                   // not a regular client. The difference is in how it
+                   // treats snooping properties among properties.
+                   , dev[0] ? dp->dev[0] : " device='*'"
+
+                   // " message='~~gzready~~'" informs downstream server
+                   // that the upstream connection is reading data using
+                   // gzread(), so the downstream server is free to use,
+                   // or not use, gzwrite() when sending data upstream
+                   , dp->gzfird ? " message='~~gzready~~'" : ""
+
+                   , INDIV // version e.g. 1.7 or similar
+               );
     setMsgStr(mp, buf);
     mp->count++;
 
