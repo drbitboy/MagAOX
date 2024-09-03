@@ -44,6 +44,7 @@ namespace app
 struct sshTunnel
 {
    std::string m_remoteHost;
+   int m_remotePort {0};
    int m_localPort {0};
 };
 
@@ -81,14 +82,16 @@ int loadSSHTunnelConfigs( tunnelMapT & tmap, ///< [out] the tunnel map which wil
       {
 
          std::string remoteHost;
+         int remotePort = 0;
          int localPort = 0;
          bool compress = false;
 
          config.configUnused( remoteHost, mx::app::iniFile::makeKey(sections[i], "remoteHost" ) );
+         config.configUnused( remotePort, mx::app::iniFile::makeKey(sections[i], "remotePort" ) );
          config.configUnused( localPort, mx::app::iniFile::makeKey(sections[i], "localPort" ) );
          config.configUnused( compress, mx::app::iniFile::makeKey(sections[i], "compress" ) );
 
-         tmap[sections[i]] = sshTunnel({remoteHost, localPort});
+         tmap[sections[i]] = sshTunnel({remoteHost, remotePort, localPort});
 
          ++matched;
       }
@@ -468,7 +471,17 @@ int xindiserver::addRemoteDrivers( std::vector<std::string> & driverArgs )
 
       m_driverNames.insert(driver);
 
-      oss << driver << "@localhost:" << m_tunnels[tunnel].m_localPort;
+      if (m_tunnels[tunnel].m_localPort > -1)
+      {
+          // Non-negative local port value:  connect to local SSH tunnel (sshDigger) at that port
+          oss << driver << "@localhost:" << m_tunnels[tunnel].m_localPort;
+      }
+      else
+      {
+          // Found "localPort = -1" (or similar) for this tunnel in sshTunnels.conf
+          // Negative local port value:  connect directly to remote host and remote port
+          oss << driver << "@" << m_tunnels[tunnel].m_remoteHost << ":" << m_tunnels[tunnel].m_remotePort;
+      }
 
       try
       {
