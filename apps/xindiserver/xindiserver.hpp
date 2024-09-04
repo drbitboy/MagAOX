@@ -563,7 +563,18 @@ int xindiserver::addRemoteServers( std::vector<std::string> & driverArgs )
 
          std::ostringstream oss;
 
-         oss << local[i] << "@localhost:" << m_tunnels[tunnel].m_localPort;
+         if (m_tunnels[tunnel].m_localPort > -1)
+         {
+            // Non-negative local port value:  connect to local SSH tunnel (sshDigger) at that port
+            oss << local[i] << "@localhost:" << m_tunnels[tunnel].m_localPort;
+         }
+         else
+         {
+            // Found "localPort = -1" (or similar) for this tunnel in sshTunnels.conf
+            // Negative local port value:  connect directly to remote host and remote port
+            oss << local[i] << "@" << m_tunnels[tunnel].m_remoteHost << ":" << m_tunnels[tunnel].m_remotePort;
+         }
+
 
          try
          {
