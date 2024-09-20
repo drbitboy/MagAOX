@@ -562,13 +562,13 @@ static int sendClientMsg(ClInfo *cp)
             fprintf(stderr, "%s: Client %d: write returned 0\n", indi_tstamp(NULL), cp->s);
         else
 #       endif
-            fprintf(stderr, "%s: Client %d: %swrite returned %ld: errno[%s]; gzerror[%s]\n"
-                          , indi_tstamp(NULL), cp->s
-                          , cp->gzfiwr ? "gz" : ""
-                          , cp->gzfiwr ? gzwrote : nw
-                          , strerror(errno)
-                          , cp->gzfiwr ? gzerror(cp->gzfiwr,NULL) : "N/A"
-                   );
+        fprintf(stderr, "%s: Client %d: %swrite returned %ld: errno[%s]; gzerror[%s]\n"
+                      , indi_tstamp(NULL), cp->s
+                      , cp->gzfiwr ? "gz" : ""
+                      , cp->gzfiwr ? gzwrote : nw
+                      , strerror(errno)
+                      , cp->gzfiwr ? gzerror(cp->gzfiwr,NULL) : "N/A"
+               );
         shutdownClient(cp);
         return (-1);
     }
@@ -932,26 +932,26 @@ static void startRemoteDvr(DvrInfo *dp)
      */
     mp = newMsg();
     pushFQ(dp->msgq, mp);
-    if (dev[0])
-        sprintf(buf, "<getProperties"
-                     " device='%s'"  // device='<dp->dev[0]>' or device='*'
-                     "%s"  // message='~~gzready~~' or nothing
-                     " version='%g'/>\n"
 
-                   // " device='*'" informs downstream server that it is
-                   // connecting to (accepting) an upstream server and
-                   // not a regular client. The difference is in how it
-                   // treats snooping properties among properties.
-                   , dev[0] ? dp->dev[0] : "*"
+    sprintf(buf, "<getProperties"
+                 " device='%s'"  // device='<dp->dev[0]>' or device='*'
+                 "%s"  // message='~~gzready~~' or nothing
+                 " version='%g'/>\n"
 
-                   // " message='~~gzready~~'" informs downstream server
-                   // that the upstream connection is reading data using
-                   // gzread(), so the downstream server is free to use,
-                   // or not use, gzwrite() when sending data upstream
-                   , dp->gzfird ? " message='~~gzready~~'" : ""
+               // " device='*'" informs downstream server that it is
+               // connecting to (accepting) an upstream server and
+               // not a regular client. The difference is in how it
+               // treats snooping properties among properties.
+               , dev[0] ? dp->dev[0] : "*"
 
-                   , INDIV // version e.g. 1.7 or similar
-               );
+               // " message='~~gzready~~'" informs downstream server
+               // that the upstream connection is reading data using
+               // gzread(), so the downstream server is free to use,
+               // or not use, gzwrite() when sending data upstream
+               , dp->gzfird ? " message='~~gzready~~'" : ""
+
+               , INDIV // version e.g. 1.7 or similar
+           );
     setMsgStr(mp, buf);
     mp->count++;
 
@@ -1162,15 +1162,19 @@ static int sendDriverMsg(DvrInfo *dp)
         else
             fprintf(stderr, "%s: Driver %s[wfd=%d]: write: %s\n", indi_tstamp(NULL), dp->name, dp->wfd, strerror(errno));
 #       endif
-        fprintf(stderr, "%s: Client %d: %swrite returned %ld: errno[%s]; gzerror[%s]\n"
-                       , indi_tstamp(NULL), dp->wfd
-                       , dp->gzfiwr ? "gz" : ""
-                       , dp->gzfiwr ? gzwrote : nw
-                       , strerror(errno)
-                       , dp->gzfiwr ? gzerror(dp->gzfiwr,NULL) : "N/A"
+        fprintf(stderr, "%s: Driver %d: %swrite returned %ld[nsend=%ld]: errno[%s]; gzerror[%s]\n"
+                      , indi_tstamp(NULL), dp->wfd
+                      , dp->gzfiwr ? "gz" : ""
+                      , dp->gzfiwr ? gzwrote : nw
+                      , nsend
+                      , strerror(errno)
+                      , dp->gzfiwr ? gzerror(dp->gzfiwr,NULL) : "N/A"
                    );
-        shutdownDvr(dp, 1);
-        return (-1);
+        if (nw || nsend)
+        {
+            shutdownDvr(dp, 1);
+            return (-1);
+        }
     }
 
     /* trace */
@@ -1847,7 +1851,9 @@ static int readFromClient(ClInfo *cp)
     if (cp->gzfird)
     {
         gzclearerr(cp->gzfird);
+        //fprintf(stderr, "%s: readFromClient - before gzread[cp->s=%d]\n", indi_tstamp(NULL), cp->s);
         nr = gzread(cp->gzfird, buf, sizeof(buf));
+        //fprintf(stderr, "%s: readFromClient - after gzread[cp->s=%d]\n", indi_tstamp(NULL), cp->s);
     }
     else
     {
@@ -2182,7 +2188,9 @@ static int readFromDriver(DvrInfo *dp)
     if (dp->gzfird)
     {
         gzclearerr(dp->gzfird);
+        //fprintf(stderr, "%s: readFromDriver - before gzread[dp->rfd=%d]\n", indi_tstamp(NULL), dp->rfd);
         nr = gzread(dp->gzfird, buf, sizeof(buf));
+        //fprintf(stderr, "%s: readFromDriver - after gzread[dp->rfd=%d]\n", indi_tstamp(NULL), dp->rfd);
     }
     else
     {
@@ -2191,9 +2199,9 @@ static int readFromDriver(DvrInfo *dp)
     if (nr <= 0)
     {
         if (nr < 0)
-            fprintf(stderr, "%s: Driver %s: stdin %s\n", indi_tstamp(NULL), dp->name, strerror(errno));
+            fprintf(stderr, "%s: Driver %s %sread:  %s\n", indi_tstamp(NULL), dp->name, dp->gzfird ? "gz" : "", strerror(errno));
         else
-            fprintf(stderr, "%s: Driver %s: stdin EOF\n", indi_tstamp(NULL), dp->name);
+            fprintf(stderr, "%s: Driver %s %sread:  EOF\n", indi_tstamp(NULL), dp->name, dp->gzfird ? "gz" : "");
 
         shutdownDvr(dp, 1);
         return (-1);

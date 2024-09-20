@@ -361,6 +361,11 @@ int xindiserver::addLocalDrivers( std::vector<std::string> & driverArgs )
    m_driverFIFOPath += MAGAOX_driverFIFORelPath;
    m_driverFIFOPath += "/";
 
+   // Loop through local driver names from INDI server configuration
+   // TOML file element
+   //
+   //   local.drivers = driver_name[, ...]
+
    for(size_t i=0; i< m_local.size(); ++i)
    {
       size_t bad = m_local[i].find_first_of("@:/", 0);
@@ -399,6 +404,11 @@ int xindiserver::addLocalDrivers( std::vector<std::string> & driverArgs )
 inline
 int xindiserver::addRemoteDrivers( std::vector<std::string> & driverArgs )
 {
+   // Loop through remote driver@host names from INDI server
+   // configuration TOML file element
+   //
+   //   remote.drivers@hosts = [driver_name]@hostname[:port_#][, ...]
+
    for(size_t i=0; i < m_driversAtHosts.size(); ++i)
    {
       std::string driver;
@@ -406,13 +416,17 @@ int xindiserver::addRemoteDrivers( std::vector<std::string> & driverArgs )
 
       size_t p = m_driversAtHosts[i].find('@');
 
-      if(p == 0 || p == std::string::npos)
+      // OLD: if(p == 0 || p == std::string::npos)
+      // - Allow remote.drivers@hosts = @hostname i.e. no driver name
+
+      if(p == std::string::npos)
       {
          log<software_critical>({__FILE__, __LINE__, "Error parsing remote driver@host[:port] specification: " + m_driversAtHosts[i] + "\n"});
          return XINDISERVER_E_BADDRIVERSPEC;
       }
 
-      driver = m_driversAtHosts[i].substr(0, p);
+      // if @ is first character, then use @hostname as driver name
+      driver = p ? m_driversAtHosts[i].substr(0, p) : m_driversAtHosts[i];
       host_port = m_driversAtHosts[i].substr(p+1);
 
       if( m_driverNames.count(driver) > 0)
@@ -433,6 +447,12 @@ int xindiserver::addRemoteDrivers( std::vector<std::string> & driverArgs )
          return XINDISERVER_E_VECTOREXCEPT;
       }
    }
+
+   // Loop through remote driver@tunnel names from INDI server
+   // configuration TOML file element
+   //
+   //   remote.drivers = driver_name@tunnel[, ...]
+
    for(size_t i=0; i < m_remote.size(); ++i)
    {
       std::string driver;
@@ -440,16 +460,23 @@ int xindiserver::addRemoteDrivers( std::vector<std::string> & driverArgs )
 
       size_t p = m_remote[i].find('@');
 
-      if(p == 0 || p == std::string::npos)
+      // OLD: if(p == 0 || p == std::string::npos)
+      // - Allow remote.drivers = @tunnel i.e. no driver name
+
+      if(p == std::string::npos)
       {
          log<software_critical>({__FILE__, __LINE__, "Error parsing remote driver specification: " + m_remote[i] + "\n"});
          return XINDISERVER_E_BADDRIVERSPEC;
       }
 
-      driver = m_remote[i].substr(0, p);
+      // if @ is first character, then use "" as driver name for now
+      driver = p ? m_remote[i].substr(0, p) : std::string("");
       tunnel = m_remote[i].substr(p+1);
 
-      if( m_driverNames.count(driver) > 0)
+      // Don't allow duplicate driver name;
+      // if @ is first character, then don't check for duplicate driver
+      // name here, and check @hostname later
+      if( p && (m_driverNames.count(driver) > 0))
       {
          log<software_critical>({__FILE__, __LINE__, "Duplicate driver name: " + driver});
          return XINDISERVER_E_DUPLICATEDRIVER;
@@ -469,19 +496,33 @@ int xindiserver::addRemoteDrivers( std::vector<std::string> & driverArgs )
          return XINDISERVER_E_TUNNELNOTFOUND;
       }
 
-      m_driverNames.insert(driver);
-
       if (m_tunnels[tunnel].m_localPort > -1)
       {
           // Non-negative local port value:  connect to local SSH tunnel (sshDigger) at that port
+          // N.B. driver may be empty string "" if @ was first character
+          //      in m_remote[i]
           oss << driver << "@localhost:" << m_tunnels[tunnel].m_localPort;
       }
       else
       {
           // Found "localPort = -1" (or similar) for this tunnel in sshTunnels.conf
           // Negative local port value:  connect directly to remote host and remote port
+          // N.B. driver may be empty string "" if @ was first character
+          //      in m_remote[i]
           oss << driver << "@" << m_tunnels[tunnel].m_remoteHost << ":" << m_tunnels[tunnel].m_remotePort;
       }
+
+      // If @ is first character in m_remote[i], then don't allow
+      // duplicate @hostname
+      if( !p && (m_driverNames.count(oss.str()) > 0))
+      {
+         log<software_critical>({__FILE__, __LINE__, "Duplicate @hostname name: " + oss.str()});
+         return XINDISERVER_E_DUPLICATEDRIVER;
+      }
+
+      // Insert non-duplicate (driver name or @hostname) into set to
+      // prevent any duplicates later
+      m_driverNames.insert(p ? driver : oss.str());
 
       try
       {
@@ -501,6 +542,12 @@ int xindiserver::addRemoteDrivers( std::vector<std::string> & driverArgs )
 inline
 int xindiserver::addRemoteServers( std::vector<std::string> & driverArgs )
 {
+
+   // Loop through remote driver names from INDI server configuration
+   // TOML file element
+   //
+   //   remote.servers = server_name@tunnel[, ...]
+
    for(size_t j=0; j < m_remoteServers.size(); ++j)
    {
       std::string server;
@@ -541,6 +588,11 @@ int xindiserver::addRemoteServers( std::vector<std::string> & driverArgs )
       std::vector<std::string> local;
 
       rsconfig(local, "local.drivers");
+
+      // Loop through local driver names from remote INDI server
+      // configuration TOML file (server_name.conf) element
+      //
+      //   local.drivers = driver_name[, ...]
 
       for(size_t i=0; i < local.size(); ++i)
       {
@@ -611,6 +663,8 @@ int xindiserver::initINDIServer()
       std::cerr << coml << std::endl;
    }
 
+   // Create pipe pair to route fprintf(stderr,...) in indiserver.c to
+   // logging via intermediate logging thread isLogThreadExec
    int filedes[2];
    if (pipe(filedes) == -1)
    {
@@ -621,6 +675,19 @@ int xindiserver::initINDIServer()
    // Route (int)STDERR_FILENO, and also (FILE*)stderr, to pipe input.
    // I.e. data written to filedes[1] can be read from filedes[0]
    while ((dup2(filedes[1], STDERR_FILENO) == -1) && (errno == EINTR)) {}
+
+   // Save pipe for logging thread; see isLogThreadExec()
+   m_isSTDERR = filedes[0];
+   m_isSTDERR_input = filedes[1];
+
+   // Start logging thread to read filedes[0] ***BEFORE***
+   // initialization of callable_indiserver(...), so logging during that
+   // initialization cannot fill the I/O buffer and block
+   if(isLogThreadStart() < 0)
+   {
+      log<software_critical>({__FILE__, __LINE__});
+      return -1;
+   }
 
    // Populate argument count and vector for callable_indiserver
    int is_argc = m_indiserverCommand.size();
@@ -636,9 +703,15 @@ int xindiserver::initINDIServer()
    // Clean up the INDI server argument vector
    delete[] is_argv;
 
-   // Save pipe for logging thread; see isLogThreadExec()
-   m_isSTDERR = filedes[0];
-   m_isSTDERR_input = filedes[1];
+   {
+      std::string comS = mx::ioutils::convertToString(m_isSTDERR)
+                       + "=m_isSTDERR(read)"
+                       + "; "
+                       + mx::ioutils::convertToString(m_isSTDERR_input)
+                       + "=m_isSTDERR_input(write)"
+                       ;
+      log<text_log>(comS);
+   }
 
    if(m_log.logLevel() <= logPrio::LOG_INFO)
    {
@@ -844,7 +917,7 @@ int xindiserver::appStartup()
    m_tunnels.clear();
 
    //--------------------
-   //Now start indiserver
+   //Now start indiserver, including logging threads
    //--------------------
    if(initINDIServer() < 0)
    {
@@ -852,11 +925,7 @@ int xindiserver::appStartup()
       return -1;
    }
 
-   if(isLogThreadStart() < 0)
-   {
-      log<software_critical>({__FILE__, __LINE__});
-      return -1;
-   }
+   //Start of logging thread moved from here to initINDIserver 2024-SEP
 
    return 0;
 }
