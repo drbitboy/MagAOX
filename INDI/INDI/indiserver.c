@@ -548,7 +548,7 @@ static int sendClientMsg(ClInfo *cp)
     }
     else
     {
-        /* ... or compressed */
+        /* ... or uncompressed */
         gzwrote = 0;
         nw = write(cp->s, &mp->cp[cp->nsent], nsend);
     }
