@@ -196,14 +196,18 @@ static int terminateddrv = 0;
 static char *indi_tstamp(char *s)
 {
     static char sbuf[64];
+    static char sbufformat[64];
     struct tm *tp;
-    time_t t;
+    struct timespec sts;
+    //time_t t;
 
-    time(&t);
-    tp = gmtime(&t);
+    clock_gettime(CLOCK_REALTIME, &sts);
+    //time(&t);
+    tp = gmtime(&sts.tv_sec);
     if (!s)
         s = sbuf;
-    strftime(s, sizeof(sbuf), "%Y-%m-%dT%H:%M:%S", tp);
+    strftime(s, sizeof(sbufformat), "%Y-%m-%dT%H:%M:%S.%%09ld", tp);
+    sprintf(sbuf, sbufformat, sts.tv_sec);
     return (s);
 }
 
@@ -528,6 +532,8 @@ static int sendClientMsg(ClInfo *cp)
     ssize_t gzwrote;
     Msg *mp;
 
+while (nFQ(cp->msgq))
+{
     /* get current message */
     mp = (Msg *)peekFQ(cp->msgq);
 
@@ -544,7 +550,7 @@ static int sendClientMsg(ClInfo *cp)
         /* ... compressed, ... */
         gzclearerr(cp->gzfiwr);
         gzwrote = nw = gzwrite(cp->gzfiwr, &mp->cp[cp->nsent], nsend);
-        gzflush(cp->gzfiwr, Z_SYNC_FLUSH);
+        //gzflush(cp->gzfiwr, Z_SYNC_FLUSH);
     }
     else
     {
@@ -630,6 +636,8 @@ static int sendClientMsg(ClInfo *cp)
         popFQ(cp->msgq);
         cp->nsent = 0;
     }
+} // while (nFQ(cp->msgq)
+gzflush(cp->gzfiwr, Z_SYNC_FLUSH);
 
     return (0);
 }
