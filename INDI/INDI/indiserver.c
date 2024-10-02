@@ -196,7 +196,6 @@ static int terminateddrv = 0;
 static char *indi_tstamp(char *s)
 {
     static char sbuf[64];
-    static char sbufformat[64];
     struct tm *tp;
     struct timespec sts;
     //time_t t;
@@ -206,8 +205,8 @@ static char *indi_tstamp(char *s)
     tp = gmtime(&sts.tv_sec);
     if (!s)
         s = sbuf;
-    strftime(s, sizeof(sbufformat), "%Y-%m-%dT%H:%M:%S.%%09ld", tp);
-    sprintf(sbuf, sbufformat, sts.tv_sec);
+    strftime(s, sizeof(sbuf), "%Y-%m-%dT%H:%M:%S", tp);
+    sprintf(s+strlen(s), ".%09ld", sts.tv_nsec);
     return (s);
 }
 
