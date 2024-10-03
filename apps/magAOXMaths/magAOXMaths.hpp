@@ -44,6 +44,8 @@ protected:
    std::string m_otherDevName;
    std::string m_otherValName;
 
+   double m_startVal{0.0};
+
    int updateVals();
 
 public:
@@ -90,6 +92,7 @@ void magAOXMaths::setupConfig()
    config.add("myVal", "", "myVal", argType::Required, "", "myVal", false, "string", "The name of this app's value.");
    config.add("otherDevName", "", "otherDevName", argType::Required, "", "otherDevName", false, "string", "The name of the other app name.");
    config.add("otherValName", "", "otherValName", argType::Required, "", "otherValName", false, "string", "The name of the other val name.");
+   config.add("startVal", "", "startVal", argType::Required, "", "startVal", false, "float", "This app's value at startup; default=0.0");
 }
 
 void magAOXMaths::loadConfig()
@@ -97,6 +100,7 @@ void magAOXMaths::loadConfig()
    config(m_myVal, "myVal");
    config(m_otherDevName, "otherDevName");
    config(m_otherValName, "otherValName");
+   config(m_startVal, "startVal");
 
 }
 
@@ -105,7 +109,8 @@ int magAOXMaths::appStartup()
    // set up the x input property
    REG_INDI_NEWPROP(m_indiP_myVal, m_myVal, pcf::IndiProperty::Number);
    indi::addNumberElement<double>( m_indiP_myVal, "value",  std::numeric_limits<double>::min(),  std::numeric_limits<double>::max(), 1.0,  "%f", "");
-   m_indiP_myVal["value"].set<double>(0.0);
+   //m_indiP_myVal["value"].set<double>(0.0);
+   m_indiP_myVal["value"].set<double>(m_startVal);
 
 
    // set up the result maths property
