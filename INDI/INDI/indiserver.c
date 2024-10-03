@@ -531,112 +531,113 @@ static int sendClientMsg(ClInfo *cp)
     ssize_t gzwrote;
     Msg *mp;
 
-do // while (nFQ(cp->msgq))
-{
-    /* get current message */
-    mp = (Msg *)peekFQ(cp->msgq);
-
-    /* send next chunk, never more than MAXWSIZ to reduce blocking */
-    nsend = mp->cl - cp->nsent;
-    if (nsend > MAXWSIZ)
-        nsend = MAXWSIZ;
-
-    /*******************************************/
-    /* Here is the beef:  data are written ... */
-    errno = 0;
-    if (cp->gzfiwr)
+    do // while (nFQ(cp->msgq))
     {
-        /* ... compressed, ... */
-        gzclearerr(cp->gzfiwr);
-        gzwrote = nw = gzwrite(cp->gzfiwr, &mp->cp[cp->nsent], nsend);
-        //gzflush(cp->gzfiwr, Z_SYNC_FLUSH);
-    }
-    else
-    {
-        /* ... or uncompressed */
-        gzwrote = 0;
-        nw = write(cp->s, &mp->cp[cp->nsent], nsend);
-    }
-    /*******************************************/
-
-    /* shut down if trouble */
-    if (nw <= 0)
-    {
-#       if 0
-        if (nw == 0)
-            fprintf(stderr, "%s: Client %d: write returned 0\n", indi_tstamp(NULL), cp->s);
-        else
-#       endif
-        fprintf(stderr, "%s: Client %d: %swrite returned %ld: errno[%s]; gzerror[%s]\n"
-                      , indi_tstamp(NULL), cp->s
-                      , cp->gzfiwr ? "gz" : ""
-                      , cp->gzfiwr ? gzwrote : nw
-                      , strerror(errno)
-                      , cp->gzfiwr ? gzerror(cp->gzfiwr,NULL) : "N/A"
-               );
-        shutdownClient(cp);
-        return (-1);
-    }
-
-    /* trace */
-    if (verbose > 2)
-    {
-        char* ts = indi_tstamp(NULL);
-        char* ptr = mp->cp + cp->nsent;
-        char* ptrend = ptr + nw;
-        char* ptrnl;
-
-        fprintf(stderr, "%s: Client %d: sending msg copy %d nq %d:\n"
-               , ts, cp->s, mp->count, nFQ(cp->msgq));
-
-        /* Break message string at newlines, so xindiserver does not
-         * read a line of logged data from STDERR without a timestamp
-         */
-        while (ptr < ptrend)
+        /* get current message */
+        mp = (Msg *)peekFQ(cp->msgq);
+    
+        /* send next chunk, never more than MAXWSIZ to reduce blocking */
+        /* N.B. this may be obsolete */
+        nsend = mp->cl - cp->nsent;
+        if (nsend > MAXWSIZ)
+            nsend = MAXWSIZ;
+    
+        /*******************************************/
+        /* Here is the beef:  data are written ... */
+        errno = 0;
+        if (cp->gzfiwr)
         {
-            /* Find first newline in remaining characters
-             * N.B. strnchr(...) does not exist
-             */
-            for (ptrnl=ptr; ptrnl<ptrend && '\n'!=*ptrnl; ++ptrnl) ;
-            if (ptr < ptrnl)
-            {
-              fprintf(stderr, "%s: Client %d: %swrote[%ld] %.*s\n"
-                            , ts, cp->s
-                            , cp->gzfiwr ? "gz" : ""
-                            , cp->gzfiwr ? gzwrote : nw
-                            , (int)(ptrnl-ptr), ptr
-                     );
-            }
-            ptr = ptrnl + 1;
+            /* ... compressed, ... */
+            gzclearerr(cp->gzfiwr);
+            gzwrote = nw = gzwrite(cp->gzfiwr, &mp->cp[cp->nsent], nsend);
+            // N.B. gzflush moved below, to outside the do-while loop
         }
-    }
-    else if (verbose > 1)
-    {
-        /* Ensure no newline is written with logged data, so xindiserver
-         * does not read a line of logged data from STDERR without a
-         * timestamp
+        else
+        {
+            /* ... or uncompressed */
+            gzwrote = 0;
+            nw = write(cp->s, &mp->cp[cp->nsent], nsend);
+        }
+        /*******************************************/
+    
+        /* shut down if trouble */
+        if (nw <= 0)
+        {
+#           if 0
+            if (nw == 0)
+                fprintf(stderr, "%s: Client %d: write returned 0\n", indi_tstamp(NULL), cp->s);
+            else
+#           endif
+            fprintf(stderr, "%s: Client %d: %swrite returned %ld: errno[%s]; gzerror[%s]\n"
+                          , indi_tstamp(NULL), cp->s
+                          , cp->gzfiwr ? "gz" : ""
+                          , cp->gzfiwr ? gzwrote : nw
+                          , strerror(errno)
+                          , cp->gzfiwr ? gzerror(cp->gzfiwr,NULL) : "N/A"
+                   );
+            shutdownClient(cp);
+            return (-1);
+        }
+    
+        /* trace */
+        if (verbose > 2)
+        {
+            char* ts = indi_tstamp(NULL);
+            char* ptr = mp->cp + cp->nsent;
+            char* ptrend = ptr + nw;
+            char* ptrnl;
+    
+            fprintf(stderr, "%s: Client %d: sending msg copy %d nq %d:\n"
+                   , ts, cp->s, mp->count, nFQ(cp->msgq));
+    
+            /* Break message string at newlines, so xindiserver does not
+             * read a line of logged data from STDERR without a timestamp
+             */
+            while (ptr < ptrend)
+            {
+                /* Find first newline in remaining characters
+                 * N.B. strnchr(...) does not exist
+                 */
+                for (ptrnl=ptr; ptrnl<ptrend && '\n'!=*ptrnl; ++ptrnl) ;
+                if (ptr < ptrnl)
+                {
+                  fprintf(stderr, "%s: Client %d: %swrote[%ld] %.*s\n"
+                                , ts, cp->s
+                                , cp->gzfiwr ? "gz" : ""
+                                , cp->gzfiwr ? gzwrote : nw
+                                , (int)(ptrnl-ptr), ptr
+                         );
+                }
+                ptr = ptrnl + 1;
+            }
+        }
+        else if (verbose > 1)
+        {
+            /* Ensure no newline is written with logged data, so xindiserver
+             * does not read a line of logged data from STDERR without a
+             * timestamp
+             */
+            char* ptr = mp->cp + cp->nsent;
+            char* ptr50 = ptr + 50;
+            char* ptrnl;
+            for (ptrnl=ptr; ptrnl<ptr50 && *ptrnl!='\n'; ++ptrnl) ;
+            fprintf(stderr, "%s: Client %d: sending %.*s\n" , indi_tstamp(NULL), cp->s, (int)(ptrnl-ptr), ptr               );
+         /* fprintf(stderr, "%s: Client %d: sending %.50s\n", indi_tstamp(NULL), cp->s                  , &mp->cp[cp->nsent]); */
+        }
+    
+        /* update amount sent. when complete: free message if we are the last
+         * to use it and pop from our queue.
          */
-        char* ptr = mp->cp + cp->nsent;
-        char* ptr50 = ptr + 50;
-        char* ptrnl;
-        for (ptrnl=ptr; ptrnl<ptr50 && *ptrnl!='\n'; ++ptrnl) ;
-        fprintf(stderr, "%s: Client %d: sending %.*s\n" , indi_tstamp(NULL), cp->s, (int)(ptrnl-ptr), ptr               );
-     /* fprintf(stderr, "%s: Client %d: sending %.50s\n", indi_tstamp(NULL), cp->s                  , &mp->cp[cp->nsent]); */
-    }
-
-    /* update amount sent. when complete: free message if we are the last
-     * to use it and pop from our queue.
-     */
-    cp->nsent += nw;
-    if (cp->nsent == mp->cl)
-    {
-        if (--mp->count == 0)
-            freeMsg(mp);
-        popFQ(cp->msgq);
-        cp->nsent = 0;
-    }
-} while (nFQ(cp->msgq));
-gzflush(cp->gzfiwr, Z_SYNC_FLUSH);
+        cp->nsent += nw;
+        if (cp->nsent == mp->cl)
+        {
+            if (--mp->count == 0)
+                freeMsg(mp);
+            popFQ(cp->msgq);
+            cp->nsent = 0;
+        }
+    } while (nFQ(cp->msgq));
+    if (cp->gzfiwr) { gzflush(cp->gzfiwr, Z_SYNC_FLUSH); }
 
     return (0);
 }
@@ -1134,111 +1135,112 @@ static int sendDriverMsg(DvrInfo *dp)
     ssize_t gzwrote;
     Msg *mp;
 
-do // while (nFQ(dp->msgq))
-{
-    /* get current message */
-    mp = (Msg *)peekFQ(dp->msgq);
-
-    /* send next chunk, never more than MAXWSIZ to reduce blocking */
-    nsend = mp->cl - dp->nsent;
-    if (nsend > MAXWSIZ)
-        nsend = MAXWSIZ;
-
-    /*******************************************/
-    /* Here is the beef:  data are written ... */
-    errno = 0;
-    if (dp->gzfiwr)
+    do // while (nFQ(dp->msgq))
     {
-        /* ... compressed, ... */
-        gzclearerr(dp->gzfiwr);
-        gzwrote = nw = gzwrite(dp->gzfiwr, &mp->cp[dp->nsent], nsend);
-        gzflush(dp->gzfiwr, Z_SYNC_FLUSH);
-    }
-    else
-    {
-        /* ... or compressed */
-        gzwrote = 0;
-        nw = write(dp->wfd, &mp->cp[dp->nsent], nsend);
-    }
-    /*******************************************/
-
-    /* restart if trouble */
-    if (nw <= 0)
-    {
-#       if 0
-        if (nw == 0)
-            fprintf(stderr, "%s: Driver %s[wfd=%d]: write returned 0\n", indi_tstamp(NULL), dp->name, dp->wfd);
+        /* get current message */
+        mp = (Msg *)peekFQ(dp->msgq);
+    
+        /* send next chunk, never more than MAXWSIZ to reduce blocking */
+        nsend = mp->cl - dp->nsent;
+        if (nsend > MAXWSIZ)
+            nsend = MAXWSIZ;
+    
+        /*******************************************/
+        /* Here is the beef:  data are written ... */
+        errno = 0;
+        if (dp->gzfiwr)
+        {
+            /* ... compressed, ... */
+            gzclearerr(dp->gzfiwr);
+            gzwrote = nw = gzwrite(dp->gzfiwr, &mp->cp[dp->nsent], nsend);
+            // N.B. gzflush moved below, to outside the do-while loop
+        }
         else
-            fprintf(stderr, "%s: Driver %s[wfd=%d]: write: %s\n", indi_tstamp(NULL), dp->name, dp->wfd, strerror(errno));
-#       endif
-        fprintf(stderr, "%s: Driver %d: %swrite returned %ld[nsend=%ld]: errno[%s]; gzerror[%s]\n"
-                      , indi_tstamp(NULL), dp->wfd
-                      , dp->gzfiwr ? "gz" : ""
-                      , dp->gzfiwr ? gzwrote : nw
-                      , nsend
-                      , strerror(errno)
-                      , dp->gzfiwr ? gzerror(dp->gzfiwr,NULL) : "N/A"
-                   );
-        if (nw || nsend)
         {
-            shutdownDvr(dp, 1);
-            return (-1);
+            /* ... or compressed */
+            gzwrote = 0;
+            nw = write(dp->wfd, &mp->cp[dp->nsent], nsend);
         }
-    }
-
-    /* trace */
-    if (verbose > 2)
-    {
-        char* ts = indi_tstamp(NULL);
-        char* ptr = mp->cp + dp->nsent;
-        char* ptrend = ptr + nw;
-        char* ptrnl;
-
-        fprintf(stderr, "%s: Driver %s: sending msg copy %d nq %d:\n"
-               , ts, dp->name, mp->count, nFQ(dp->msgq));
-
-        /* Break message string at newlines, so xindiserver does not
-         * read a line of logged data from STDERR without a timestamp
-         */
-        while (ptr < ptrend)
+        /*******************************************/
+    
+        /* restart if trouble */
+        if (nw <= 0)
         {
-            /* Find first newline in remaining characters
-             * N.B. strnchr(...) does not exist
-             */
-            for (ptrnl=ptr; ptrnl<ptrend && '\n'!=*ptrnl; ++ptrnl) ;
-            if (ptr < ptrnl)
+#           if 0
+            if (nw == 0)
+                fprintf(stderr, "%s: Driver %s[wfd=%d]: write returned 0\n", indi_tstamp(NULL), dp->name, dp->wfd);
+            else
+                fprintf(stderr, "%s: Driver %s[wfd=%d]: write: %s\n", indi_tstamp(NULL), dp->name, dp->wfd, strerror(errno));
+#           endif
+            fprintf(stderr, "%s: Driver %d: %swrite returned %ld[nsend=%ld]: errno[%s]; gzerror[%s]\n"
+                          , indi_tstamp(NULL), dp->wfd
+                          , dp->gzfiwr ? "gz" : ""
+                          , dp->gzfiwr ? gzwrote : nw
+                          , nsend
+                          , strerror(errno)
+                          , dp->gzfiwr ? gzerror(dp->gzfiwr,NULL) : "N/A"
+                       );
+            if (nw || nsend)
             {
-              fprintf(stderr, "%s: Driver %s: %.*s\n", ts, dp->name, (int)(ptrnl-ptr), ptr);
+                shutdownDvr(dp, 1);
+                return (-1);
             }
-            ptr = ptrnl + 1;
         }
-    }
-    else if (verbose > 1)
-    {
-        /* Ensure no newline is written with logged data, so xindiserver
-         * does not read a line of logged data from STDERR without a
-         * timestamp
+    
+        /* trace */
+        if (verbose > 2)
+        {
+            char* ts = indi_tstamp(NULL);
+            char* ptr = mp->cp + dp->nsent;
+            char* ptrend = ptr + nw;
+            char* ptrnl;
+    
+            fprintf(stderr, "%s: Driver %s: sending msg copy %d nq %d:\n"
+                   , ts, dp->name, mp->count, nFQ(dp->msgq));
+    
+            /* Break message string at newlines, so xindiserver does not
+             * read a line of logged data from STDERR without a timestamp
+             */
+            while (ptr < ptrend)
+            {
+                /* Find first newline in remaining characters
+                 * N.B. strnchr(...) does not exist
+                 */
+                for (ptrnl=ptr; ptrnl<ptrend && '\n'!=*ptrnl; ++ptrnl) ;
+                if (ptr < ptrnl)
+                {
+                  fprintf(stderr, "%s: Driver %s: %.*s\n", ts, dp->name, (int)(ptrnl-ptr), ptr);
+                }
+                ptr = ptrnl + 1;
+            }
+        }
+        else if (verbose > 1)
+        {
+            /* Ensure no newline is written with logged data, so xindiserver
+             * does not read a line of logged data from STDERR without a
+             * timestamp
+             */
+            char* ptr = mp->cp + dp->nsent;
+            char* ptr50 = ptr + 50;
+            char* ptrnl;
+            for (ptrnl=ptr; ptrnl<ptr50 && *ptrnl!='\n'; ++ptrnl) ;
+            fprintf(stderr, "%s: Driver %s: sending %.*s\n" , indi_tstamp(NULL), dp->name, (int)(ptrnl-ptr), ptr);
+         /* fprintf(stderr, "%s: Driver %s: sending %.50s\n", indi_tstamp(NULL), dp->name                  , &mp->cp[dp->nsent]); */
+        }
+    
+        /* update amount sent. when complete: free message if we are the last
+         * to use it and pop from our queue.
          */
-        char* ptr = mp->cp + dp->nsent;
-        char* ptr50 = ptr + 50;
-        char* ptrnl;
-        for (ptrnl=ptr; ptrnl<ptr50 && *ptrnl!='\n'; ++ptrnl) ;
-        fprintf(stderr, "%s: Driver %s: sending %.*s\n" , indi_tstamp(NULL), dp->name, (int)(ptrnl-ptr), ptr);
-     /* fprintf(stderr, "%s: Driver %s: sending %.50s\n", indi_tstamp(NULL), dp->name                  , &mp->cp[dp->nsent]); */
-    }
-
-    /* update amount sent. when complete: free message if we are the last
-     * to use it and pop from our queue.
-     */
-    dp->nsent += nw;
-    if (dp->nsent == mp->cl)
-    {
-        if (--mp->count == 0)
-            freeMsg(mp);
-        popFQ(dp->msgq);
-        dp->nsent = 0;
-    }
-} while (nFQ(dp->msgq) && dp->pid == REMOTEDVR);
+        dp->nsent += nw;
+        if (dp->nsent == mp->cl)
+        {
+            if (--mp->count == 0)
+                freeMsg(mp);
+            popFQ(dp->msgq);
+            dp->nsent = 0;
+        }
+    } while (nFQ(dp->msgq) && dp->pid == REMOTEDVR);
+    if (dp->gzfiwr) { gzflush(dp->gzfiwr, Z_SYNC_FLUSH); }
 
     return (0);
 }
