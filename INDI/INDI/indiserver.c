@@ -531,7 +531,7 @@ static int sendClientMsg(ClInfo *cp)
     ssize_t gzwrote;
     Msg *mp;
 
-while (nFQ(cp->msgq))
+do // while (nFQ(cp->msgq))
 {
     /* get current message */
     mp = (Msg *)peekFQ(cp->msgq);
@@ -635,7 +635,7 @@ while (nFQ(cp->msgq))
         popFQ(cp->msgq);
         cp->nsent = 0;
     }
-} // while (nFQ(cp->msgq)
+} while (nFQ(cp->msgq));
 gzflush(cp->gzfiwr, Z_SYNC_FLUSH);
 
     return (0);
@@ -1134,6 +1134,8 @@ static int sendDriverMsg(DvrInfo *dp)
     ssize_t gzwrote;
     Msg *mp;
 
+do // while (nFQ(dp->msgq))
+{
     /* get current message */
     mp = (Msg *)peekFQ(dp->msgq);
 
@@ -1236,6 +1238,7 @@ static int sendDriverMsg(DvrInfo *dp)
         popFQ(dp->msgq);
         dp->nsent = 0;
     }
+} while (nFQ(dp->msgq) && dp->pid == REMOTEDVR);
 
     return (0);
 }
