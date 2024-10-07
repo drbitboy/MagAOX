@@ -210,6 +210,8 @@ static char *indi_tstamp(char *s)
     return (s);
 }
 
+#include "dumpis.c"
+
 /* log when then exit */
 static void Bye()
 {
@@ -1367,6 +1369,8 @@ static void newFIFO(void)
         memset(&envPrefix[0], 0, sizeof(char) * MAXSBUF);
 
         int n = 0;
+
+        if (!strcmp(line, "dump")) { dumpis(); continue; }
 
         // If remote driver
         if (strstr(line, "@"))
