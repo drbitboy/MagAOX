@@ -1977,7 +1977,8 @@ static int readFromClient(ClInfo *cp)
             * on any remote drivers, we should catch it and forward it to the responsible snooping driver. */
             /* send to snooping drivers. */
             // JM 2016-05-26: Only forward setXXX messages
-            if (!strncmp(roottag, "set", 3))
+            // BTC 2010-10-09: Only forward setXXX and defXXX messages
+            if (!strncmp(roottag, "set", 3) || !strncmp(roottag, "def", 3))
                 q2SDrivers(NULL, isblob, dev, name, mp, root);
 
             /* echo new* commands back to other clients */
