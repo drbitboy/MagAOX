@@ -4,10 +4,11 @@ SELF_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 include $(SELF_DIR)/../../Make/common.mk
 LILXMLDIR=../liblilxml
 
+CFLAGS = -O0
 all: indiserver getINDI setINDI evalINDI
 
 indiserver: strcat_varargs.c strcat_varargs.h open_named_fifo.c open_named_fifo.h config.h indiapi.h indidevapi.h fq.c fq.h dumpis.c $(LILXMLDIR)/liblilxml.a indiserver.c
-	$(CC) $(CFLAGS) -DGIT_TAG_STRING='"$(shell git describe --tags)"' -g -o $@ -I$(LILXMLDIR) $(shell pkg-config --cflags zlib) indiserver.c strcat_varargs.c open_named_fifo.c fq.c $(LILXMLDIR)/liblilxml.a $(shell pkg-config --libs zlib)
+	$(CC) $(CFLAGS) -DGIT_TAG_STRING='"$(shell git describe --tags)"' -o $@ -I$(LILXMLDIR) $(shell pkg-config --cflags zlib) indiserver.c strcat_varargs.c open_named_fifo.c fq.c $(LILXMLDIR)/liblilxml.a $(shell pkg-config --libs zlib)
 
 
 getINDI: connect_to.h connect_to.c indiapi.h getINDI.c
