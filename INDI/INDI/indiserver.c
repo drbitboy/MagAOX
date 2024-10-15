@@ -1013,7 +1013,7 @@ static void shutdownDvr(DvrInfo *dp, int restart)
     int i = 0;
     char* ts = indi_tstamp(NULL);  /* Common timestamp for this call */
 
-    // Queue Msg's to snooping clients:  devices of this driver are dead
+    // Queue Msg to snooping clients:  devices of this driver are dead
     for (i = 0; i < dp->ndev; i++)
     {
         /* Build XML message <delProperty device="devname" ... /> */
@@ -1076,9 +1076,10 @@ static void shutdownDvr(DvrInfo *dp, int restart)
 
 /* Write the next chunk of the current message in the queue to the given
  * driver. pop message from queue when complete and free the message if we are
- * the last one to use it. restart this driver if touble.
+ * the last one to use it; loop through all messages on queue
+ * Restart this driver if trouble.
  * N.B. we assume we will never be called with dp->msgq empty.
- * return 0 if ok else -1 if had to shut down.
+ * return 0 if ok else -1 if had to shut the driver down.
  */
 static int sendDriverMsg(DvrInfo *dp)
 {
@@ -1270,14 +1271,13 @@ static void indiFIFO(void)
     }
 }
 
+/* If device <dev> is in dp's device list, then return 1, else 0 */
 int isDeviceInDriver(const char *dev, DvrInfo *dp)
 {
-    int i = 0;
-    for (i = 0; i < dp->ndev; i++)
+    for (int i = 0; i < dp->ndev; i++)
     {
         if (!strcmp(dev, dp->dev[i])) { return 1; }
     }
-
     return 0;
 }
 
