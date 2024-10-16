@@ -1023,6 +1023,7 @@ static void shutdownDvr(DvrInfo *dp, int restart)
         /* Prefix timestamp to line of XML sent to STDERR */
         fprintf(stderr, "%s: Driver shutdown: ", ts);
         prXMLEle(stderr, root, 0);
+        mp = newMsg();
 
         /* Allocate Msg, queue it to clients snooping this device */
         q2Clients(NULL, 0, dp->dev[i], NULL, mp, root);
