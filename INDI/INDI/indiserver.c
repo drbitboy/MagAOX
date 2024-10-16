@@ -202,7 +202,7 @@ static char *indi_tstamp(char *s)
     return (s);
 }
 
-#include "dumpis.c"
+#include "dumpis.c"  // Routines to dump INDI server state
 
 /* log when then exit */
 static void Bye()
@@ -1340,6 +1340,7 @@ static void newFIFO(void)
 
         int n = 0;
 
+        /* Dump INDI server state; see include of dumpis.c above */
         if (!strcmp(line, "dump")) { dumpis(); continue; }
 
         // If remote driver
