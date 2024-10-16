@@ -173,7 +173,7 @@ static char *me;                                       /* our name */
 #define SELECT_WAITs 1  /* Select wait, seconds */
 static pDvr pRestarts;  /* linked list of drivers to restart */
 
-static int port = INDIPORT;                            /* public INDI port */
+static int listen_port = INDIPORT;                     /* public INDI port */
 static int verbose;                                    /* chattiness */
 static int use_is_zlib = 0;                            /* inter-INDI server zlib compression */
 static int lsocket;                                    /* listen socket */
@@ -272,7 +272,8 @@ static DvrInfo *allocDvr()
         dvrinfo = (DvrInfo *)realloc(dvrinfo, (ndvrinfo + 1) * sizeof(DvrInfo));
         if (!dvrinfo)
         {
-            fprintf(stderr, "no memory for new drivers\n");
+            fprintf(stderr, "%s: No memory for new drivers\n"
+                          , indi_tstamp(NULL));
             Bye();
         }
         dp = dvrinfo + ndvrinfo++;
@@ -299,7 +300,8 @@ static int openINDIServer(char host[], int indi_port)
     hp = gethostbyname(host);
     if (!hp)
     {
-        fprintf(stderr, "gethostbyname(%s): %s\n", host, strerror(errno));
+        fprintf(stderr, "%s: gethostbyname(%s): %s\n"
+               , indi_tstamp(NULL), host, strerror(errno));
         Bye();
     }
 
@@ -310,7 +312,8 @@ static int openINDIServer(char host[], int indi_port)
     serv_addr.sin_port        = htons(indi_port);
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
-        fprintf(stderr, "socket(%s,%d): %s\n", host, indi_port, strerror(errno));
+        fprintf(stderr, "%s: socket(%s,%d): %s\n"
+               , indi_tstamp(NULL), host, indi_port, strerror(errno));
         Bye();
     }
 
@@ -318,10 +321,11 @@ static int openINDIServer(char host[], int indi_port)
     errno = 0; /* ensure errno is 0 on success or non-zero on failure */
     if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
     {
-        fprintf(stderr, "connect(%s,%d): %s\n", host, indi_port, strerror(errno));
+        fprintf(stderr, "%s: connect(%s,%d): %s\n"
+               , indi_tstamp(NULL) , host, indi_port, strerror(errno));
         /* Drop thru with valid but unconnected fd, instead of Bye();
-         * errno will be non-zero, which will cause trigger calling code
-         * to shut down this driver
+         * errno will be non-zero, which will trigger calling code into
+         * shutting down this driver
          */
     }
     else
@@ -477,7 +481,8 @@ static void shutdownClient(ClInfo *cp)
 
     if (verbose > 0)
     {
-        fprintf(stderr, "%s: Client %d: shut down complete - bye!\n", indi_tstamp(NULL), cp->s);
+        fprintf(stderr, "%s: Client %d: shut down complete - bye!\n"
+               , indi_tstamp(NULL), cp->s);
     }
 #   ifdef OSX_EMBEDED_MODE
     int active = 0;
@@ -485,7 +490,7 @@ static void shutdownClient(ClInfo *cp)
     {
         if (clinfo[i].active) { active++; }
     }
-    fprintf(stderr, "CLIENTS %d\n", active);
+    fprintf(stderr, "%s: CLIENTS %d\n", indi_tstamp(NULL), active);
     fflush(stderr);
 #   endif
 }
@@ -861,14 +866,15 @@ static void startRemoteDvr(DvrInfo *dp)
     char buf[MAXSBUF] = {0};
     int indi_port, sockfd;
 
-    /* extract host and port */
+    /* extract host and port; default port is INDIPORT (7624 typ.) */
     indi_port = INDIPORT;
     if (sscanf(dp->name, "%[^@]@%[^:]:%d", dev, host, &indi_port) < 2)
     {
         // Device missing? Try a different syntax for all devices
         if (sscanf(dp->name, "@%[^:]:%d", host, &indi_port) < 1)
         {
-            fprintf(stderr, "Bad remote device syntax: %s\n", dp->name);
+            fprintf(stderr, "%s: Bad remote device syntax: %s\n"
+                          , indi_tstamp(NULL) , dp->name);
             Bye();
         }
     }
@@ -950,7 +956,8 @@ static void startLocalDvr(DvrInfo *dp)
     int fdstdout;
 
 #   ifdef OSX_EMBEDED_MODE
-    fprintf(stderr, "STARTING \"%s\"\n", dp->name);
+    fprintf(stderr, "%s: STARTING \"%s\"\n"
+                  , indi_tstamp(NULL), dp->name);
     fflush(stderr);
 #   endif
 
@@ -1043,7 +1050,8 @@ static void shutdownDvr(DvrInfo *dp, int restart)
     closeINDIconnection(NULL, dp);
 
 #   ifdef OSX_EMBEDED_MODE
-    fprintf(stderr, "STOPPED \"%s\"\n", dp->name);
+    fprintf(stderr, "%s: STOPPED \"%s\"\n"
+                  , indi_tstamp(NULL), dp->name);
     fflush(stderr);
 #   endif
 
@@ -1231,7 +1239,7 @@ static void indiListen()
 #   else
     serv_socket.sin_addr.s_addr = htonl(INADDR_ANY);
 #   endif
-    serv_socket.sin_port = htons((unsigned short)port);
+    serv_socket.sin_port = htons((unsigned short)listen_port);
     if (setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0)
     {
         fprintf(stderr, "%s: setsockopt: %s\n", indi_tstamp(NULL), strerror(errno));
@@ -1253,7 +1261,10 @@ static void indiListen()
     /* ok */
     lsocket = sfd;
     if (verbose > 0)
-        fprintf(stderr, "%s: listening to port %d on fd %d\n", indi_tstamp(NULL), port, sfd);
+    {
+        fprintf(stderr, "%s: listening to port %d on fd %d\n"
+                      , indi_tstamp(NULL), listen_port, sfd);
+    }
 }
 
 /* Attempt to open up FIFO */
@@ -1344,8 +1355,6 @@ static void newFIFO(void)
                 memmove(ptr, ptr + 1, --len);
                 ptr[len] = '\0';
             }
-
-            //fprintf(stderr, "Remote Driver: %s\n", tDriver);
             remoteDriver = 1;
         }
         // If local driver
@@ -1361,9 +1370,6 @@ static void newFIFO(void)
         int j = 0;
         for (j = 0; j < n_args; j++)
         {
-            //fprintf(stderr, "arg[%d]: %c\n", i, arg[j][0]);
-            //fprintf(stderr, "var[%d]: %s\n", i, var[j]);
-
             if (arg[j][0] == 'n')
             {
                 strncpy(tName, var[j], MAXSBUF - 1);
@@ -1539,7 +1545,8 @@ static void newClient()
         clinfo = (ClInfo *)realloc(clinfo, (nclinfo + 1) * sizeof(ClInfo));
         if (!clinfo)
         {
-            fprintf(stderr, "no memory for new client\n");
+            fprintf(stderr, "%s: No memory for new client\n"
+                          , indi_tstamp(NULL));
             Bye();
         }
         cp = &clinfo[nclinfo++];
@@ -1579,7 +1586,7 @@ static void newClient()
     {
         if (clinfo[i].active) { active++; }
     }
-    fprintf(stderr, "CLIENTS %d\n", active);
+    fprintf(stderr, "%s: CLIENTS %d\n", indi_tstamp(NULL), active);
     fflush(stderr);
 #   endif
 }
@@ -2219,7 +2226,8 @@ static int readFromDriver(DvrInfo *dp)
 #           ifdef OSX_EMBEDED_MODE
             if (!dp->ndev)
             {
-                fprintf(stderr, "STARTED \"%s\"\n", dp->name);
+                fprintf(stderr, "%s: STARTED \"%s\"\n"
+                              , indi_tstamp(NULL) , dp->name);
             }
             fflush(stderr);
 #           endif
@@ -2385,7 +2393,8 @@ int __INDISERVER_MAIN__(int ac, char *av[])
 #   ifdef OSX_EMBEDED_MODE
     char logname[128];
     snprintf(logname, 128, LOGNAME, getlogin());
-    fprintf(stderr, "switching stderr to %s", logname);
+    fprintf(stderr, "%s: switching stderr to %s"
+                  , indi_tstamp(NULL) , logname);
     freopen(logname, "w", stderr);
 
     fifo.name = FIFONAME;
@@ -2413,7 +2422,7 @@ int __INDISERVER_MAIN__(int ac, char *av[])
                     break;
                 case 'p':
                     if (ac < 2) { usage("-p requires port value"); }
-                    port = atoi(*++av);
+                    listen_port = atoi(*++av);
                     ac--;
                     break;
                 case 'd':
@@ -2476,12 +2485,13 @@ int __INDISERVER_MAIN__(int ac, char *av[])
     /* Load up FIFO, if available */
     indiFIFO();
 
-#ifdef __CALL_INDIRUN_IN_MAIN__
+#   ifdef __CALL_INDIRUN_IN_MAIN__
     /* handle new clients and all io */
     while (1) { indiRun(); }
 
     /* whoa! */
-    fprintf(stderr, "unexpected return from main\n");
-#endif//__CALL_INDIRUN_IN_MAIN__
+    fprintf(stderr, "%s: unexpected return from main\n"
+                  , indi_tstamp(NULL));
+#   endif//__CALL_INDIRUN_IN_MAIN__
     return (1);
 }
