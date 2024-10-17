@@ -104,7 +104,7 @@ void dumpDvrInfo(DvrInfo* dp)
 
     fprintf(STDDUMPIS, "{ \"%s\": \"%s\"", "name", dp->name);
     fprintf(STDDUMPIS, ", \"%s\": %d", "active", dp->active);
-    fprintf(STDDUMPIS, ", \"%s\": %d", "pid", dp->pid);
+    fprintf(STDDUMPIS, ", \"%s\": %d", "isremot", dp->isremot);
     fprintf(STDDUMPIS, ", \"%s\": %d", "ndev", dp->ndev);
     fprintf(STDDUMPIS, ", \"%s\": %d", "nsent", dp->nsent);
     fprintf(STDDUMPIS, ", \"%s\": %d", "restartDelayus", dp->restartDelayus);
