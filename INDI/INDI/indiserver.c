@@ -730,7 +730,9 @@ static int q2Clients(ClInfo *notme, int isblob, const char *dev, const char *nam
         {
             if (verbose)
             {
-                fprintf(stderr, "%s: Client %d: %d bytes behind, shutting down\n", indi_tstamp(NULL), cp->s, ql);
+                fprintf(stderr, "%s: Client %d: %d bytes behind,"
+                                " shutting down\n"
+                              , indi_tstamp(NULL), cp->s, ql);
             }
             shutdownClient(cp);
             shutany++;
