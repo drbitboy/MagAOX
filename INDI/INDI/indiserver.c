@@ -81,8 +81,6 @@
 #include "open_named_fifo.h"
 
 #define INDIPORT      7624    /* default TCP/IP port to listen */
-#define REMOTEDVR     (-1234) /* invalid PID to flag remote drivers */
-#define LOCALDVR      (-2468) /* invalid PID to flag local drivers */
 #define MAXSBUF       512
 #define MAXRBUF       49152 /* max read buffering here */
 #define MAXWSIZ       49152 /* max bytes/write */
@@ -153,7 +151,7 @@ typedef struct strDvrInfo
     int active;         /* 1 when this record is in use */
     Property *sprops;   /* malloced array of props we snoop */
     int nsprops;        /* n entries in sprops[] */
-    int pid;            /* process id or REMOTEDVR if remote */
+    int isremot;        /* non-zero if remote; zero if local */
     int rfd;            /* read pipe fd */
     int wfd;            /* write pipe fd */
     int restarts;       /* times process has been restarted */
@@ -885,8 +883,8 @@ static void startRemoteDvr(DvrInfo *dp)
     sockfd = openINDIServer(host, indi_port);
     int save_errno = errno;
 
-    /* record flag pid, io channels, init lp and snoop list */
-    dp->pid = REMOTEDVR;
+    /* record various properties, init lp (XML), Msg, and snoop lists */
+    dp->isremot = -1;
     strncpy(dp->host, host, MAXSBUF);
     dp->port    = indi_port;
     dp->rfd     = sockfd;
@@ -975,8 +973,8 @@ static void startLocalDvr(DvrInfo *dp)
         Bye();
     }
 
-    /* record pid, io channels, init lp and snoop list */
-    dp->pid = LOCALDVR;
+    /* record various properties, init lp (XML), Msg, and snoop lists */
+    dp->isremot = 0;
     strncpy(dp->host, "localhost", MAXSBUF);
     dp->port    = -1;
     dp->wfd     = fdstdin;
@@ -1004,8 +1002,8 @@ static void startLocalDvr(DvrInfo *dp)
 
     if (verbose > 0)
     {
-        fprintf(stderr, "%s: Driver %s: pid=%d rfd=%d wfd=%d\n", indi_tstamp(NULL), dp->name, dp->pid, dp->rfd,
-                dp->wfd);
+        fprintf(stderr, "%s: Driver %s: rfd=%d wfd=%d\n"
+                      , indi_tstamp(NULL), dp->name, dp->rfd, dp->wfd);
     }
 }
 
@@ -1209,7 +1207,7 @@ static int sendDriverMsg(DvrInfo *dp)
             popFQ(dp->msgq);
             dp->nsent = 0;
         }
-    } while (nFQ(dp->msgq) && dp->pid == REMOTEDVR);
+    } while (nFQ(dp->msgq) && dp->isremot);
 
     /* Flush bits if written by gzwrite */
     if (dp->gzfiwr) { gzflush(dp->gzfiwr, Z_SYNC_FLUSH); }
@@ -1715,7 +1713,7 @@ static void q2RDrivers(const char *dev, Msg *mp, XMLEle *root)
      */
     for (dp = dvrinfo; dp < &dvrinfo[ndvrinfo]; dp++)
     {
-        int isRemote = (dp->pid == REMOTEDVR);
+        int isRemote = (dp->isremot);
 
         if (dp->active == 0 || dp->restartDelayus > 0) { continue; }
 
@@ -1787,7 +1785,7 @@ static void q2SDrivers(DvrInfo *me, int isblob, const char *dev, const char *nam
         if ((isblob && sp->blob == B_NEVER)
          || (!isblob && sp->blob == B_ONLY)) { continue; }
 
-        if (me && me->pid == REMOTEDVR && dp->pid == REMOTEDVR)
+        if (me && me->isremot && dp->isremot)
         {
             // Do not send snoop data to remote drivers at the same host
             // since they will manage their own snoops remotely
