@@ -65,7 +65,8 @@ void dumpProperty(Property* prop)
 void dumpClInfo(ClInfo* cp)
 {
     int idx;
-    int nmsgq;
+    int nmsgq  = cp->active && cp->msgq  ? nFQ(cp->msgq) : -1;
+    int nprops = cp->active && cp->props ? cp->nprops    : -1;
 
     fprintf(STDDUMPIS, "{ \"%s\": %d", "active", cp->active);
     fprintf(STDDUMPIS, ", \"%s\": %d", "allprops", cp->allprops);
@@ -77,17 +78,24 @@ void dumpClInfo(ClInfo* cp)
     fprintf(STDDUMPIS, ", \"%s\": %d", "gzwchk", cp->gzwchk);
     fprintf(STDDUMPIS, ", \"%s\": \"%p\"", "XML_parser", cp->lp);
     fprintf(STDDUMPIS, ", \"%s\": %d", "allprops", cp->allprops);
-
     fprintf(STDDUMPIS, ", \"%s\": \"%p\"", "props_pointer", cp->props);
-    fprintf(STDDUMPIS, ", \"%s\": %d", "props_count", cp->nprops);
+    fprintf(STDDUMPIS, ", \"%s\": %d", "props_count", nprops);
     fprintf(STDDUMPIS, ", \"%s\": [\n", "props_list");
-    for (idx=0; idx<cp->nprops && cp->props; ++idx)
+    for (idx=0; idx < nprops; ++idx)
     {
         DUMPIS1( idx ? ", " : "  ", dumpProperty(cp->props + idx));
     }
+    if (-1 == nprops)
+    {
+      fprintf(STDDUMPIS, "%s: { \"noprops\": \"No Property list"
+                         " generated here because Client object is not"
+                         " active and/or Property* list pointer is"
+                         " null\" }\n"
+                       , dumpts
+             );
+    }
     fprintf(STDDUMPIS, "%s: ]\n", dumpts);
 
-    nmsgq = cp->msgq ? nFQ(cp->msgq) : -1;
     fprintf(STDDUMPIS, "%s: , \"%s\": %d", dumpts, "msgq_count", nmsgq);
     fprintf(STDDUMPIS, ", \"%s\": \"%p\"", "msgq_pointer", cp->msgq);
     fprintf(STDDUMPIS, ", \"%s\": [\n", "msgq_list");
@@ -95,16 +103,26 @@ void dumpClInfo(ClInfo* cp)
     {
         DUMPIS1( idx ? ", " : "  ", dumpMsg(peekiFQ(cp->msgq, idx)));
     }
+    if (-1 == nmsgq)
+    {
+      fprintf(STDDUMPIS, "%s: { \"nomsgq\": \"No Message list"
+                         " generated here because Client object is not"
+                         " active and/or FQ* message queue pointer is"
+                         " null\" }\n"
+                       , dumpts
+             );
+    }
     fprintf(STDDUMPIS, "%s: ]}", dumpts);
 }
 void dumpDvrInfo(DvrInfo* dp)
 {
     int idx;
-    int nmsgq;
+    int nmsgq   = dp->active && dp->msgq   ? nFQ(dp->msgq) : -1;
+    int nsprops = dp->active && dp->sprops ? dp->nsprops   : -1;
 
     fprintf(STDDUMPIS, "{ \"%s\": \"%s\"", "name", dp->name);
     fprintf(STDDUMPIS, ", \"%s\": %d", "active", dp->active);
-    fprintf(STDDUMPIS, ", \"%s\": %d", "pid", dp->pid);
+    fprintf(STDDUMPIS, ", \"%s\": %d", "isremot", dp->isremot);
     fprintf(STDDUMPIS, ", \"%s\": %d", "ndev", dp->ndev);
     fprintf(STDDUMPIS, ", \"%s\": %d", "nsent", dp->nsent);
     fprintf(STDDUMPIS, ", \"%s\": %d", "restartDelayus", dp->restartDelayus);
@@ -122,21 +140,38 @@ void dumpDvrInfo(DvrInfo* dp)
     fprintf(STDDUMPIS, ", \"%s\": \"%s\"", "envPrefix", dp->envPrefix);
 
     fprintf(STDDUMPIS, ", \"%s\": \"%p\"", "sprops_pointer", dp->sprops);
-    fprintf(STDDUMPIS, ", \"%s\": %d", "sprops_count", dp->nsprops);
+    fprintf(STDDUMPIS, ", \"%s\": %d", "sprops_count", nsprops);
     fprintf(STDDUMPIS, ", \"%s\": [\n", "sprops_list");
-    for (idx=0; idx<dp->nsprops && dp->sprops; ++idx)
+    for (idx=0; idx < nsprops; ++idx)
     {
         DUMPIS1( idx ? ", " : "  ", dumpProperty(dp->sprops + idx));
     }
+    if (-1 == nsprops)
+    {
+      fprintf(STDDUMPIS, "%s: { \"noprops\": \"No Property list"
+                         " generated here because Driver object is not"
+                         " active and/or Property* list pointer is"
+                         " null\" }\n"
+                       , dumpts
+             );
+    }
     fprintf(STDDUMPIS, "%s: ]\n", dumpts);
 
-    nmsgq = dp->msgq ? nFQ(dp->msgq) : -1;
     fprintf(STDDUMPIS, "%s: , \"%s\": %d", dumpts, "msgq_count", nmsgq);
     fprintf(STDDUMPIS, ", \"%s\": \"%p\"", "msgq_pointer", dp->msgq);
     fprintf(STDDUMPIS, ", \"%s\": [\n", "msgq_list");
     for (idx=0; idx < nmsgq; ++idx)
     {
         DUMPIS1( idx ? ", " : "  ", dumpMsg(peekiFQ(dp->msgq, idx)));
+    }
+    if (-1 == nmsgq)
+    {
+      fprintf(STDDUMPIS, "%s: { \"nomsgq\": \"No Message list"
+                         " generated here because Driver object is not"
+                         " active and/or FQ* message queue pointer is"
+                         " null\" }\n"
+                       , dumpts
+             );
     }
 
     fprintf(STDDUMPIS, "%s: ]}", dumpts);
