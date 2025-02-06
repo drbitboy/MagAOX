@@ -751,7 +751,7 @@ private: // Internal attributes and interfaces
     // ////////////////////////////////////////////////////////////////
     // ////////////////////////////////////////////////////////////////
     /// Find this instance's hexbeater PID by argv[0] and hexbeater name
-    /** Use the static HexbeatMonitor::find_hexbeater_pid below
+    /** Use the static HexbeatMonitor::find_hexbeater_pid above
       * \returns PID of matching process from /proc/ filesystem
       */
     int
