@@ -361,7 +361,7 @@ public: // interfaces
       * or equivalent (e.g. execvp)
       * \arg \c argv0 is the argv[0] of the process
       * \arg \c hexbeater_name is the argv[2] of the process,
-      * following the -n in argv[3]
+      * following the -n in argv[1]
       *
       * $ echo Sanford | od -a -b -tx1 -tx4
       * 0000000   S   a   n   f   o   r   d  nl
