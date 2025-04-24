@@ -34,7 +34,7 @@ for arg in $(default_options) $* ; do
   -r=*,*,*) _arg_r="${_arg_r} ${arg#-r=}" ;;
   -r=) true ;;
   -SP=*) _arg_SP="${arg#-SP=}" ;;
-  -2=*) _arg_2=${arg#-k=} ;;
+  -2=*) _arg_2=${arg#-2=} ;;
   -k=*) _arg_k=${arg#-k=} ;;
   *) echo "Bad argument [$arg]; exiting" && false || default_options help && false || exit 1 ;;
   esac
